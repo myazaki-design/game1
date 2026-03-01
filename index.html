@@ -234,7 +234,9 @@ gy: -</div>
   <button class="ed-btn" data-type="flower" data-variant="1" onclick="edSelect(this)" title="花②">🌺</button>
   <button class="ed-btn" data-type="grass" data-variant="0" onclick="edSelect(this)" title="草①">🌿</button>
   <button class="ed-btn" data-type="grass" data-variant="1" onclick="edSelect(this)" title="草②">🍃</button>
-  <button class="ed-btn" data-type="house" data-variant="0" onclick="edSelect(this)" title="家">🏡</button>
+  <button class="ed-btn" data-type="house" data-variant="0" onclick="edSelect(this)" title="家①">🏡</button>
+  <button class="ed-btn" data-type="house" data-variant="1" onclick="edSelect(this)" title="家②">🏠</button>
+  <button class="ed-btn" data-type="windmill" data-variant="0" onclick="edSelect(this)" title="風車">⚙️</button>
   <div class="ed-sep"></div>
   <button class="ed-btn" data-type="field_f001" data-variant="0" onclick="edSelect(this)" title="field_001">🟫</button>
   <button class="ed-btn" data-type="field_f002" data-variant="0" onclick="edSelect(this)" title="field_002">◻️</button>
@@ -297,8 +299,7 @@ for(const id of Object.keys(HARVEST_IMG)){
   harvestImgs[id] = img;
 }
 
-const homeImg = new Image();
-homeImg.src = 'assets/home_001.png';
+const HOME_FILES = ['home_001.png','home_002.png']; // map.png スプライトシートから参照
 const goldImg = new Image();
 goldImg.src = 'assets/gold.png';
 
@@ -314,22 +315,19 @@ const pigState = { gx:4.5, gy:6.5, dir:1, frameIndex:0, lastFrameTime:0 };
 let pigConfig = { minGx:4.5, maxGx:6.5, yConst:11 };
 let outerTileMap = {};
 
-// Map objects: 木(tree) 草(grass) 花(flower) 石(rock)
+// Map objects: 木(tree) 草(grass) 花(flower) 石(rock) 風車(windmill) - map.png スプライトシート使用
 const MAP_OBJ = {
   tree: ['map_obj_006.png','map_obj_007.png'],
   grass: ['map_obj_001.png','map_obj_002.png'],
   flower: ['map_obj_003.png','map_obj_005.png'],
-  rock: ['map_obj_004.png']
+  rock: ['map_obj_004.png'],
+  windmill: ['map_obj_008.png']
 };
-const mapObjImgs = {};
-function loadMapObjs(){
-  for(const [type,files] of Object.entries(MAP_OBJ)){
-    mapObjImgs[type]=files.map(f=>{
-      const img=new Image();img.src='assets/'+f;return img;
-    });
-  }
-}
-loadMapObjs();
+const mapSheetImg = new Image();
+mapSheetImg.src = 'assets/map.png';
+let mapSheetFrames = {};
+fetch('assets/map.json').then(r=>r.json()).then(data=>{mapSheetFrames=data.frames||{};});
+const mapObjImgs = MAP_OBJ; // type -> [filename,...]
 function playSound(id){const a=SOUNDS[id];if(a){a.currentTime=0;a.play().catch(()=>{})}}
 
 // ==================== STATE ====================
@@ -393,6 +391,11 @@ function screenToWorld(sx,sy){
 function worldToScreen(wx,wy){
   return{x:(wx-W/2)*camera.zoom+W/2+camera.x,y:(wy-H/2)*camera.zoom+H/2+camera.y};
 }
+const CULL_MARGIN=200;
+function isVisible(wx,wy){
+  const s=worldToScreen(wx,wy);
+  return s.x>-CULL_MARGIN&&s.x<W+CULL_MARGIN&&s.y>-CULL_MARGIN&&s.y<H+CULL_MARGIN;
+}
 
 function resizeCanvas(){
   const dpr = window.devicePixelRatio||1;
@@ -444,7 +447,6 @@ const DECO_LAYOUT=[
   {type:'flower',gx:1.95,gy:10.43,variant:0},
   {type:'tree',gx:-9.6,gy:-9,variant:0},
   {type:'tree',gx:-11,gy:-5.7,variant:0},
-  {type:'tree',gx:-9.8,gy:-6.2,variant:0},
   {type:'tree',gx:-14,gy:-2.7,variant:0},
   {type:'tree',gx:-14.4,gy:-5.4,variant:0},
   {type:'tree',gx:-6.9,gy:-12.7,variant:0},
@@ -452,14 +454,12 @@ const DECO_LAYOUT=[
   {type:'tree',gx:-1.8,gy:-12.8,variant:0},
   {type:'tree',gx:1.7,gy:-10.1,variant:0},
   {type:'tree',gx:-11.3,gy:0.8,variant:0},
-  {type:'tree',gx:-12.2,gy:-3.6,variant:0},
   {type:'grass',gx:-5,gy:-12.5,variant:0},
   {type:'grass',gx:-2,gy:-11.8,variant:0},
   {type:'grass',gx:2.7,gy:-8.6,variant:0},
   {type:'rock',gx:-3.9,gy:-11.9,variant:0},
   {type:'rock',gx:-11,gy:-1.5,variant:0},
   {type:'house',gx:0.8,gy:-3.6,variant:0},
-  {type:'grass',gx:3.4,gy:-3.9,variant:1},
   {type:'grass',gx:-6.3,gy:-11.1,variant:1},
   {type:'flower',gx:-3.2,gy:-10.9,variant:0},
   {type:'flower',gx:-7.9,gy:-9.4,variant:1},
@@ -467,7 +467,6 @@ const DECO_LAYOUT=[
   {type:'tree',gx:4.2,gy:16.1,variant:0},
   {type:'tree',gx:20.5,gy:10.1,variant:0},
   {type:'tree',gx:17.6,gy:5.6,variant:0},
-  {type:'tree',gx:-2.3,gy:-4.9,variant:1},
   {type:'grass',gx:-4.6,gy:-2.6,variant:1},
   {type:'flower',gx:-11.6,gy:-1.1,variant:0},
   {type:'flower',gx:-10.6,gy:-4.8,variant:0},
@@ -475,21 +474,57 @@ const DECO_LAYOUT=[
   {type:'grass',gx:10.5,gy:16.8,variant:0},
   {type:'grass',gx:16,gy:12,variant:0},
   {type:'grass',gx:-7.8,gy:1.4,variant:0},
-  {type:'pig_config',minGx:6,maxGx:8,yConst:20}
+  {type:'pig_config',minGx:5,maxGx:7,yConst:18},
+  {type:'tree',gx:-0.3,gy:-6.6,variant:1},
+  {type:'tree',gx:-2.1,gy:-4.2,variant:1},
+  {type:'tree',gx:5.3,gy:-6.3,variant:1},
+  {type:'tree',gx:-5.5,gy:-10.1,variant:1},
+  {type:'tree',gx:-9.7,gy:-6.2,variant:1},
+  {type:'tree',gx:-12.5,gy:-3.3,variant:1},
+  {type:'tree',gx:-8.2,gy:3.5,variant:1},
+  {type:'tree',gx:10.9,gy:19.4,variant:1},
+  {type:'tree',gx:6,gy:17.3,variant:1},
+  {type:'tree',gx:18.3,gy:9.8,variant:1},
+  {type:'rock',gx:17.9,gy:11.2,variant:0},
+  {type:'flower',gx:8.3,gy:17.6,variant:1},
+  {type:'flower',gx:12.7,gy:16.7,variant:0},
+  {type:'flower',gx:6.7,gy:15.8,variant:0},
+  {type:'flower',gx:-0.5,gy:10.8,variant:0},
+  {type:'flower',gx:16.1,gy:6.1,variant:0},
+  {type:'flower',gx:12.7,gy:1.9,variant:0},
+  {type:'grass',gx:15.1,gy:14.9,variant:1},
+  {type:'grass',gx:14.8,gy:4.7,variant:1},
+  {type:'grass',gx:19.5,gy:10.9,variant:1},
+  {type:'grass',gx:1.4,gy:-9.3,variant:1},
+  {type:'flower',gx:2.1,gy:-3.5,variant:0},
+  {type:'flower',gx:-2.5,gy:-2.9,variant:0},
+  {type:'flower',gx:-8.5,gy:-8.5,variant:0},
+  {type:'grass',gx:-8.4,gy:-11.1,variant:0},
+  {type:'grass',gx:-4.3,gy:-13.8,variant:0},
+  {type:'grass',gx:-13.2,gy:-5.3,variant:0},
+  {type:'grass',gx:-11.1,gy:-3,variant:0},
+  {type:'grass',gx:7.3,gy:-1.4,variant:0},
+  {type:'grass',gx:7.7,gy:13.6,variant:0},
+  {type:'grass',gx:12.7,gy:13.1,variant:0},
+  {type:'grass',gx:0.3,gy:7.3,variant:0},
+  {type:'grass',gx:-4.5,gy:1.2,variant:0},
+  {type:'grass',gx:12.4,gy:6.8,variant:0}
 ];
 
 const DEFAULT_OUTER_TILE_MAP={
-  '-1,-1':'f004','0,-1':'f001','1,-1':'f001','2,-1':'f001','3,-1':'f001','4,-1':'f002','5,-1':'f002','6,-1':null,
-  '-1,0':'f004','6,0':null,'-1,1':'f004','6,1':null,'-1,2':'f004','6,2':null,'-1,3':'f004','6,3':null,'-1,4':'f004','6,4':null,'-1,5':'f004','6,5':null,'-1,6':'f004',
+  '-1,-1':'f004','6,-1':null,'-1,0':'f004','6,0':null,'-1,1':'f004','6,1':null,'-1,2':'f004','6,2':null,'-1,3':'f004','6,3':null,'-1,4':'f004','6,4':null,'6,5':null,
   '0,6':null,'1,6':null,'2,6':null,'3,6':null,'4,6':null,'5,6':null,'6,6':null,
-  '0,-2':'f004','-1,-2':'f004','1,-2':'f004','2,-2':'f004','3,-2':'f004','4,-2':'f004','5,-2':'f004','6,-2':'f004','7,-2':'f004',
-  '7,-3':'f004','8,-4':null,'7,-4':'f004','7,-5':'f004',
-  '-1,7':'f004','-1,8':null,'-1,9':null,'-2,7':'f004','-3,7':'f004','-4,7':'f004','-5,7':'f004'
+  '0,-2':'f004','-1,-2':'f004','1,-2':'f004','2,-2':'f004','3,-2':'f004','4,-2':'f004',
+  '8,-4':null,'7,-4':'f004','7,-5':'f004','-1,8':null,'-1,9':null,
+  '-2,4':'f004','-3,4':'f004','-3,5':'f004','-3,6':'f004','-4,6':'f004','-5,6':'f004','-6,6':'f004',
+  '4,-3':'f004','5,-4':'f004','4,-4':'f004','6,-4':'f004',
+  '1,1':'f001','1,0':'f001','2,0':'f001','2,1':'f001','3,1':'f001','3,0':'f001','3,2':'f001','2,3':'f002','2,2':'f001','1,3':'f002','1,2':'f001','3,3':'f002','4,3':'f002','4,2':'f002','4,1':'f002','4,0':'f002'
 };
 
 function initOuterTiles(){
   if(game&&game.outerTileMap&&Object.keys(game.outerTileMap).length>0){for(const k of Object.keys(outerTileMap))delete outerTileMap[k];Object.assign(outerTileMap,game.outerTileMap);return}
   if(Object.keys(outerTileMap).length===0)Object.assign(outerTileMap,DEFAULT_OUTER_TILE_MAP);
+  if(EDITOR_MODE)return;
   const G=getGridSize();
   for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
     if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
@@ -507,10 +542,13 @@ function generateDecorations(){
   decos.length=0;
   DECO_LAYOUT.forEach(d=>decos.push({...d}));
   initOuterTiles();
+  if(game&&game.outerPlots){for(const key of Object.keys(outerTileMap)){if(outerTileMap[key]==='f001'&&!game.outerPlots[key])game.outerPlots[key]={state:'empty',cropId:null,plantedAt:null}}}
   applyPigConfig();
   buildStaticDrawList();
 }
 
+const MAP_OBJ_TYPES=new Set(['tree','grass','flower','rock','windmill']);
+const FIELD_TYPES=new Set(['field_f001','field_f002','field_f003','field_f004']);
 function buildStaticDrawList(){
   if(tileW<=0||tileH<=0)return;
   staticDrawList.length=0;
@@ -521,7 +559,7 @@ function buildStaticDrawList(){
     const [gx,gy]=key.split(',').map(Number);
     const tt=tileType||'f003';
     const d=gx+gy;
-    staticDrawList.push({depth:d,draw(){
+    staticDrawList.push({depth:d,gx,gy,draw(){
       const p=g2s(gx,gy);
       if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(tt,p.x,p.y,tileW,tileH);
       else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=tt==='f003'?'rgba(100,160,50,.18)':tt==='f004'?'rgba(120,120,120,.5)':'rgba(139,90,43,.4)';ctx.fill()}
@@ -529,17 +567,19 @@ function buildStaticDrawList(){
       if(tt==='f001'&&game&&game.outerPlots&&game.outerPlots[key])drawOuterCropOverlay(p.x,p.y,game.outerPlots[key],Date.now());
     }});
   }
-  for(let idx=0;idx<FARM_MAX;idx++){
-    const gx=idx%G,gy=Math.floor(idx/G);
-    staticDrawList.push({depth:gx+gy+.05,draw(){drawFarmTile(gx,gy,idx,Date.now())}});
+  if(!EDITOR_MODE){
+    for(let idx=0;idx<FARM_MAX;idx++){
+      const gx=idx%G,gy=Math.floor(idx/G);
+      staticDrawList.push({depth:gx+gy+.05,gx,gy,draw(){drawFarmTile(gx,gy,idx,Date.now())}});
+    }
   }
   for(const d of decos){
     if(d.type==='pig_config')continue;
     const dd=d.gx+d.gy+(d.type==='tree'?0.3:0);
-    staticDrawList.push({depth:dd,draw(){
-      if(['tree','grass','flower','rock'].includes(d.type))drawMapObj(d);
+    staticDrawList.push({depth:dd,gx:d.gx,gy:d.gy,draw(){
+      if(MAP_OBJ_TYPES.has(d.type))drawMapObj(d);
       else if(d.type==='house')drawHouse(d);
-      else if(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003'||d.type==='field_f004'){
+      else if(FIELD_TYPES.has(d.type)){
         const p=g2s(d.gx,d.gy);
         const fkey=d.type.replace('field_','');
         if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(fkey,p.x,p.y,tileW,tileH);
@@ -555,12 +595,13 @@ function buildStaticDrawList(){
 // ==================== DRAW HELPERS ====================
 function drawDiamond(cx,cy,w,h){ctx.beginPath();ctx.moveTo(cx,cy-h/2);ctx.lineTo(cx+w/2,cy);ctx.lineTo(cx,cy+h/2);ctx.lineTo(cx-w/2,cy);ctx.closePath()}
 
-function drawFlatTile(cx,cy,fillColor,locked,ready){
+function drawFlatTile(cx,cy,fillColor,locked,ready,tileType){
+  const tile=tileType||'f001';
   if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0){
     ctx.save();
     if(locked)ctx.filter='brightness(0.5) saturate(0.3)';
     else if(ready)ctx.filter='brightness(1.15) saturate(1.3) sepia(0.2)';
-    drawFieldFrame('f001',cx,cy,tileW,tileH);
+    drawFieldFrame(tile,cx,cy,tileW,tileH);
     ctx.restore();
   }else{
     drawDiamond(cx,cy,tileW,tileH);ctx.fillStyle=fillColor;ctx.fill();
@@ -588,11 +629,13 @@ function drawMapObj(item){
   const p=g2s(item.gx,item.gy);
   const arr=mapObjImgs[item.type];
   if(!arr)return;
-  const img=arr[item.variant%arr.length];
-  if(!img.complete||img.naturalWidth<=0)return;
-  const w=img.naturalWidth,h=img.naturalHeight;
+  const filename=arr[item.variant%arr.length];
+  const fr=mapSheetFrames[filename]?.frame;
+  if(!mapSheetImg.complete||!fr)return;
+  const scale=item.type==='windmill'?2/3:1;
+  const w=fr.w*scale,h=fr.h*scale;
   const dy=p.y+tileH/2-h;
-  ctx.drawImage(img,p.x-w/2,dy,w,h);
+  ctx.drawImage(mapSheetImg,fr.x,fr.y,fr.w,fr.h,p.x-w/2,dy,w,h);
 }
 
 function drawPig(now){
@@ -618,10 +661,12 @@ function drawPig(now){
 function drawHouse(item){
   const p=g2s(item.gx,item.gy);
   const scale=2/3;
-  if(homeImg.complete&&homeImg.naturalWidth>0){
-    const w=homeImg.naturalWidth*scale,h=homeImg.naturalHeight*scale;
+  const filename=HOME_FILES[item.variant%2];
+  const fr=mapSheetFrames[filename]?.frame;
+  if(mapSheetImg.complete&&fr){
+    const w=fr.w*scale,h=fr.h*scale;
     const dy=p.y+tileH/2-h;
-    ctx.drawImage(homeImg,p.x-w/2,dy,w,h);
+    ctx.drawImage(mapSheetImg,fr.x,fr.y,fr.w,fr.h,p.x-w/2,dy,w,h);
   }else{
     const bw=tileW*.7*scale,bh=tileH*.5*scale,wh=28*scale;
     ctx.fillStyle='rgba(0,0,0,.1)';ctx.beginPath();ctx.ellipse(p.x,p.y+5,bw*.6,bh*.5,0,0,Math.PI*2);ctx.fill();
@@ -671,14 +716,17 @@ function render(ts){
     if(changed)saveGame();
   }
 
-  // 描画：staticDrawList + pig（pigはdepthで挿入位置を二分探索）
+  // 描画：staticDrawList + pig（pigはdepthで挿入位置を二分探索）+ ビューポートカリング
   const pigDepth=pigState.gx+pigState.gy;
   let pigDrawn=false;
   for(let i=0;i<staticDrawList.length;i++){
-    if(PIG_VISIBLE&&!pigDrawn&&staticDrawList[i].depth>pigDepth){drawPig(now);pigDrawn=true}
-    staticDrawList[i].draw();
+    if(PIG_VISIBLE&&!EDITOR_MODE&&!pigDrawn&&staticDrawList[i].depth>pigDepth){drawPig(now);pigDrawn=true}
+    const item=staticDrawList[i];
+    const wp=g2s(item.gx,item.gy);
+    if(!isVisible(wp.x,wp.y))continue;
+    item.draw();
   }
-  if(PIG_VISIBLE&&!pigDrawn)drawPig(now);
+  if(PIG_VISIBLE&&!EDITOR_MODE&&!pigDrawn)drawPig(now);
 
   // Tap highlight
   if(highlightTile){
@@ -698,11 +746,14 @@ function render(ts){
 function drawFarmTile(gx,gy,idx,now){
   const p=g2s(gx,gy);const plot=game.plots[idx];
   if(!plot)return;
+  const farmKey=gx+','+gy;
+  const customTile=outerTileMap[farmKey];
 
   if(!plot.exists){
+    const tile=customTile||'f002';
     if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0){
-      if(buildMode)ctx.save();ctx.filter='brightness(1.1)';
-      drawFieldFrame('f002',p.x,p.y,tileW,tileH);
+      if(buildMode){ctx.save();ctx.filter='brightness(1.1)';}
+      drawFieldFrame(tile,p.x,p.y,tileW,tileH);
       if(buildMode)ctx.restore();
     }else{
       drawDiamond(p.x,p.y,tileW*.96,tileH*.96);
@@ -714,7 +765,7 @@ function drawFarmTile(gx,gy,idx,now){
   }
 
   if(!plot.unlocked){
-    drawFlatTile(p.x,p.y,'#BDBDBD',true);
+    drawFlatTile(p.x,p.y,'#BDBDBD',true,false,customTile);
     ctx.font='16px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('🔒',p.x,p.y-3);
     ctx.font='bold 8px var(--font)';ctx.fillStyle='#616161';
@@ -726,7 +777,7 @@ function drawFarmTile(gx,gy,idx,now){
     return;
   }
 
-  drawFlatTile(p.x,p.y,'#A1887F',false,plot.state==='ready');
+  drawFlatTile(p.x,p.y,'#A1887F',false,plot.state==='ready',customTile);
   drawSoilLines(p.x,p.y);
 
   if(plot.state==='empty'){
@@ -1275,8 +1326,7 @@ function edPlace(gx,gy,sx,sy){
   const gxi=Math.round(gx),gyi=Math.round(gy);
   const isOuter=gxi<0||gxi>=G||gyi<0||gyi>=G;
   if(['field_f001','field_f002','field_f003','field_f004'].includes(edState.type)){
-    if(isOuter)outerTileMap[gxi+','+gyi]=edState.type.replace('field_','');
-    else decos.push({type:edState.type,gx:Math.round(gx*10)/10,gy:Math.round(gy*10)/10,variant:edState.variant});
+    outerTileMap[gxi+','+gyi]=edState.type.replace('field_','');
     buildStaticDrawList();
     return;
   }
@@ -1290,16 +1340,20 @@ function edPlace(gx,gy,sx,sy){
     return;
   }
   if(edState.type==='house'){const i=decos.findIndex(d=>d.type==='house');if(i>=0)decos.splice(i,1);}
-  decos.push({type:edState.type,gx:Math.round(gx*10)/10,gy:Math.round(gy*10)/10,variant:edState.variant});
+  const ngx=Math.round(gx*10)/10,ngy=Math.round(gy*10)/10;
+  const dup=decos.findIndex(d=>d.type===edState.type&&d.variant===edState.variant&&Math.abs(d.gx-ngx)<0.15&&Math.abs(d.gy-ngy)<0.15);
+  if(dup>=0)return;
+  decos.push({type:edState.type,gx:ngx,gy:ngy,variant:edState.variant});
   buildStaticDrawList();
 }
 
 function edRemoveNearest(gx,gy,sx,sy){
   const G=getGridSize();
+  const gxi=Math.round(gx),gyi=Math.round(gy);
   let ot=null;
   if(sx!=null&&sy!=null){const w=screenToWorld(sx,sy);ot=getOuterTileAt(w.x,w.y);}
-  else{const gxi=Math.round(gx),gyi=Math.round(gy);if(gxi<0||gxi>=G||gyi<0||gyi>=G)ot={gx:gxi,gy:gyi};}
-  if(ot){outerTileMap[ot.gx+','+ot.gy]=null;buildStaticDrawList();return;}
+  if(!ot){const key=gxi+','+gyi;if(outerTileMap[key]!==undefined&&outerTileMap[key]!==null)ot={gx:gxi,gy:gyi};}
+  if(ot){const key=ot.gx+','+ot.gy;if(outerTileMap[key]!==undefined&&outerTileMap[key]!==null){delete outerTileMap[key];const di=decos.findIndex(d=>(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003'||d.type==='field_f004')&&Math.round(d.gx)===ot.gx&&Math.round(d.gy)===ot.gy);if(di>=0)decos.splice(di,1);buildStaticDrawList();return;}}
   const pc=decos.find(d=>d.type==='pig_config');
   if(pc){
     const py=pc.yConst-pc.minGx;
@@ -1315,11 +1369,7 @@ function edClearAll(){
   if(confirm('すべての装飾を削除しますか？')){
     decos.length=0;
     pigConfig={minGx:4.5,maxGx:6.5,yConst:11};
-    const G=getGridSize();
-    for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
-      if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
-      outerTileMap[gx+','+gy]='f003';
-    }
+    for(const k of Object.keys(outerTileMap))delete outerTileMap[k];
     buildStaticDrawList();
   }
 }
@@ -1352,9 +1402,9 @@ function edImport(){
 
 function renderEditorOverlay(){
   if(!EDITOR_MODE)return;
-  // 配置済みオブジェクトの位置に点を表示
   for(const d of decos){
     const dp=g2s(d.gx,d.gy);
+    if(!isVisible(dp.x,dp.y))continue;
     ctx.beginPath();ctx.arc(dp.x,dp.y-4,4,0,Math.PI*2);
     ctx.fillStyle='rgba(255,179,0,0.7)';ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1;ctx.stroke();
