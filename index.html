@@ -131,6 +131,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 @keyframes qualityFlash{0%{opacity:.6}100%{opacity:0}}
 
 @media(min-width:481px){#game-wrap{border-left:1px solid #4E342E;border-right:1px solid #4E342E}}
+
+/* ===== LAYOUT EDITOR ===== */
+#editor-panel{position:fixed;top:50%;right:8px;transform:translateY(-50%);z-index:600;display:none;flex-direction:column;gap:5px;background:rgba(0,0,0,0.78);border-radius:16px;padding:10px 7px;border:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(6px)}
+#editor-panel.active{display:flex}
+.ed-btn{width:42px;height:42px;border-radius:10px;border:2px solid transparent;background:rgba(255,255,255,0.08);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;-webkit-tap-highlight-color:transparent;padding:0}
+.ed-btn:hover{background:rgba(255,255,255,0.18)}
+.ed-btn.selected{border-color:#FFB300;background:rgba(255,179,0,0.25)}
+.ed-btn.del-active{border-color:#E53935;background:rgba(229,57,53,0.25)}
+.ed-sep{height:1px;background:rgba(255,255,255,0.15);margin:2px 0}
+#ed-coord{font-size:9px;color:#bbb;text-align:center;font-family:monospace;white-space:pre;line-height:1.5;min-width:42px}
 </style>
 </head>
 <body>
@@ -212,6 +222,27 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 <div id="toast-container"></div>
 <div id="particles-container"></div>
 
+<!-- ===== LAYOUT EDITOR ===== -->
+<div id="editor-panel">
+  <div id="ed-coord">gx: -
+gy: -</div>
+  <div class="ed-sep"></div>
+  <button class="ed-btn selected" data-type="tree" data-variant="0" onclick="edSelect(this)" title="木①">🌲</button>
+  <button class="ed-btn" data-type="tree" data-variant="1" onclick="edSelect(this)" title="木②">🌳</button>
+  <button class="ed-btn" data-type="rock" data-variant="0" onclick="edSelect(this)" title="石">🪨</button>
+  <button class="ed-btn" data-type="flower" data-variant="0" onclick="edSelect(this)" title="花①">🌸</button>
+  <button class="ed-btn" data-type="flower" data-variant="1" onclick="edSelect(this)" title="花②">🌺</button>
+  <button class="ed-btn" data-type="grass" data-variant="0" onclick="edSelect(this)" title="草①">🌿</button>
+  <button class="ed-btn" data-type="grass" data-variant="1" onclick="edSelect(this)" title="草②">🍃</button>
+  <button class="ed-btn" data-type="house" data-variant="0" onclick="edSelect(this)" title="家">🏡</button>
+  <div class="ed-sep"></div>
+  <button class="ed-btn" id="ed-delete" onclick="edToggleDelete()" title="削除モード">✂️</button>
+  <button class="ed-btn" onclick="edClearAll()" title="全消去">🗑️</button>
+  <div class="ed-sep"></div>
+  <button class="ed-btn" onclick="edExport()" title="JSONコピー">📋</button>
+  <button class="ed-btn" onclick="edImport()" title="JSONインポート">📥</button>
+</div>
+
 <script>
 // ==================== DATA ====================
 const CROPS = [
@@ -270,8 +301,8 @@ pigImg.src = 'assets/pig.png';
 const PIG_FRAMES = [{x:0,y:0,w:300,h:300},{x:300,y:0,w:300,h:300},{x:0,y:300,w:300,h:300},{x:300,y:300,w:300,h:300}];
 const PIG_FRAME_MS = 200;
 const PIG_SPEED = 0.35;
-const PIG_Y_CONST = -2;
-const pigState = { gx:-1.5, gy:-0.5, dir:1, frameIndex:0, lastFrameTime:0 };
+const PIG_Y_CONST = 11;
+const pigState = { gx:4.5, gy:6.5, dir:1, frameIndex:0, lastFrameTime:0 };
 
 // Map objects: 木(tree) 草(grass) 花(flower) 石(rock)
 const MAP_OBJ = {
@@ -378,53 +409,51 @@ function g2s(gx,gy){return{x:originX+(gx-gy)*tileW/2,y:originY+(gx+gy)*tileH/2}}
 function pointInDiamond(px,py,cx,cy,w,h){const dx=Math.abs(px-cx),dy=Math.abs(py-cy);return(dx/(w/2)+dy/(h/2))<=1}
 
 // ==================== DECORATIONS ====================
-function seededRandom(seed){return function(){seed=(seed*9301+49297)%233280;return seed/233280}}
+const DECO_LAYOUT=[
+  {type:'tree',gx:9.96,gy:-3.74,variant:1},
+  {type:'grass',gx:2.89,gy:7.78,variant:0},
+  {type:'grass',gx:8.02,gy:3.86,variant:0},
+  {type:'grass',gx:-2.88,gy:7.46,variant:0},
+  {type:'grass',gx:8.84,gy:9.25,variant:0},
+  {type:'flower',gx:1.95,gy:10.43,variant:0},
+  {type:'tree',gx:-9.6,gy:-9,variant:0},
+  {type:'tree',gx:-11,gy:-5.7,variant:0},
+  {type:'tree',gx:-9.8,gy:-6.2,variant:0},
+  {type:'tree',gx:-14,gy:-2.7,variant:0},
+  {type:'tree',gx:-14.4,gy:-5.4,variant:0},
+  {type:'tree',gx:-6.9,gy:-12.7,variant:0},
+  {type:'tree',gx:-5.3,gy:-13.4,variant:0},
+  {type:'tree',gx:-1.8,gy:-12.8,variant:0},
+  {type:'tree',gx:1.7,gy:-10.1,variant:0},
+  {type:'tree',gx:-11.3,gy:0.8,variant:0},
+  {type:'tree',gx:-12.2,gy:-3.6,variant:0},
+  {type:'grass',gx:-5,gy:-12.5,variant:0},
+  {type:'grass',gx:-2,gy:-11.8,variant:0},
+  {type:'grass',gx:2.7,gy:-8.6,variant:0},
+  {type:'rock',gx:-3.9,gy:-11.9,variant:0},
+  {type:'rock',gx:-11,gy:-1.5,variant:0},
+  {type:'house',gx:0.8,gy:-3.6,variant:0},
+  {type:'grass',gx:3.4,gy:-3.9,variant:1},
+  {type:'grass',gx:-6.3,gy:-11.1,variant:1},
+  {type:'flower',gx:-3.2,gy:-10.9,variant:0},
+  {type:'flower',gx:-7.9,gy:-9.4,variant:1},
+  {type:'tree',gx:9.9,gy:20.7,variant:0},
+  {type:'tree',gx:4.2,gy:16.1,variant:0},
+  {type:'tree',gx:20.5,gy:10.1,variant:0},
+  {type:'tree',gx:17.6,gy:5.6,variant:0},
+  {type:'tree',gx:-2.3,gy:-4.9,variant:1},
+  {type:'grass',gx:-4.6,gy:-2.6,variant:1},
+  {type:'flower',gx:-11.6,gy:-1.1,variant:0},
+  {type:'flower',gx:-10.6,gy:-4.8,variant:0},
+  {type:'grass',gx:10.3,gy:-1.1,variant:0},
+  {type:'grass',gx:10.5,gy:16.8,variant:0},
+  {type:'grass',gx:16,gy:12,variant:0},
+  {type:'grass',gx:-7.8,gy:1.4,variant:0}
+];
+
 function generateDecorations(){
   decos.length=0;
-  const rnd=seededRandom(12345);
-  const farmMargin=0.8,houseMargin=2.5,houseMarginTree=4;
-  const G = getGridSize();
-  const homeX=-2,homeY=-1.2;
-  const outside=(gx,gy)=>gx<-0.3||gx>G-0.1||gy<-0.3||gy>G-0.1;
-  const clearFromFarm=(gx,gy)=>gx<-farmMargin||gx>G-1+farmMargin||gy<-farmMargin||gy>G-1+farmMargin;
-  const clearFromHouse=(gx,gy,m)=>Math.hypot(gx-homeX,gy-homeY)>(m||houseMargin);
-  const minDist=1.8;
-  const distOk=(gx,gy)=>{
-    if(Math.hypot(gx-homeX,gy-homeY)<houseMargin)return false;
-    for(const d of decos){
-      if(d.gx!=null&&d.gy!=null&&Math.hypot(d.gx-gx,d.gy-gy)<minDist)return false;
-    }
-    return true;
-  };
-  const ok=(gx,gy,forTree)=>outside(gx,gy)&&clearFromFarm(gx,gy)&&clearFromHouse(gx,gy,forTree?houseMarginTree:houseMargin)&&distOk(gx,gy);
-  const tryPlace=(n,type,area,variant)=>{
-    const arr=mapObjImgs[type];
-    const [x0,x1,y0,y1]=area;
-    for(let i=0;i<n;i++){
-      let gx,gy,tries=0;
-      do{
-        gx=x0+rnd()*(x1-x0);gy=y0+rnd()*(y1-y0);
-        tries++;
-      }while(!ok(gx,gy,type==='tree')&&tries<80);
-      if(ok(gx,gy,type==='tree'))decos.push({type,gx,gy,variant:variant!==undefined?variant:Math.floor(rnd()*arr.length)});
-    }
-  };
-  const L=-5,R=G+5,T=-5,B=G+5;
-  const leftOuter=-1.5,rightOuter=G+0.5,topOuter=-1,bottomOuter=G+0.5;
-  const rockLeft=-3.5,rockRight=G+2,rockBottom=G+1.5;
-  tryPlace(2,'tree',[L,leftOuter,T,topOuter]);
-  tryPlace(2,'tree',[rightOuter,R,T,topOuter],1);
-  tryPlace(2,'grass',[L,R,T,topOuter]);
-  tryPlace(2,'grass',[L,R,bottomOuter,B]);
-  tryPlace(2,'grass',[L,leftOuter,rockBottom,B]);
-  tryPlace(2,'grass',[rightOuter,R,rockBottom,B]);
-  tryPlace(2,'flower',[L,leftOuter,T,B]);
-  tryPlace(2,'flower',[rightOuter,R,T,B]);
-  tryPlace(1,'flower',[L,R,T,topOuter]);
-  tryPlace(1,'flower',[L,R,bottomOuter,B]);
-  tryPlace(2,'rock',[L,rockLeft,rockBottom,B]);
-  tryPlace(2,'rock',[rockRight,R,rockBottom,B]);
-  decos.push({type:'house',gx:-2,gy:-1.2});
+  DECO_LAYOUT.forEach(d=>decos.push({...d}));
   buildStaticDrawList();
 }
 
@@ -503,7 +532,7 @@ function drawPig(now){
   if(!pigImg.complete||pigImg.naturalWidth<=0)return;
   if(pigState.lastFrameTime===0)pigState.lastFrameTime=now;
   const G=getGridSize();
-  const minGx=-2,maxGx=G+0.5;
+  const minGx=4.5,maxGx=6.5;
   pigState.gx+=pigState.dir*PIG_SPEED*(now-pigState.lastFrameTime)/1000;
   pigState.lastFrameTime=now;
   if(pigState.gx<=minGx){pigState.gx=minGx;pigState.dir=1;}
@@ -522,12 +551,13 @@ function drawPig(now){
 
 function drawHouse(item){
   const p=g2s(item.gx,item.gy);
+  const scale=2/3;
   if(homeImg.complete&&homeImg.naturalWidth>0){
-    const w=homeImg.naturalWidth,h=homeImg.naturalHeight;
+    const w=homeImg.naturalWidth*scale,h=homeImg.naturalHeight*scale;
     const dy=p.y+tileH/2-h;
     ctx.drawImage(homeImg,p.x-w/2,dy,w,h);
   }else{
-    const bw=tileW*.7,bh=tileH*.5,wh=28;
+    const bw=tileW*.7*scale,bh=tileH*.5*scale,wh=28*scale;
     ctx.fillStyle='rgba(0,0,0,.1)';ctx.beginPath();ctx.ellipse(p.x,p.y+5,bw*.6,bh*.5,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#FFCC80';ctx.beginPath();ctx.moveTo(p.x+bw/2,p.y);ctx.lineTo(p.x,p.y+bh/2);ctx.lineTo(p.x,p.y+bh/2-wh);ctx.lineTo(p.x+bw/2,p.y-wh);ctx.closePath();ctx.fill();
     ctx.fillStyle='#FFB74D';ctx.beginPath();ctx.moveTo(p.x-bw/2,p.y);ctx.lineTo(p.x,p.y+bh/2);ctx.lineTo(p.x,p.y+bh/2-wh);ctx.lineTo(p.x-bw/2,p.y-wh);ctx.closePath();ctx.fill();
@@ -586,6 +616,8 @@ function render(ts){
       drawDiamond(p.x,p.y,tileW,tileH);ctx.fillStyle='rgba(255,255,255,'+(a*.35)+')';ctx.fill();
     }
   }
+
+  renderEditorOverlay();
 
   ctx.restore();
 }
@@ -749,6 +781,7 @@ canvas.addEventListener('wheel',e=>{
 },{passive:false});
 
 function handleTap(sx,sy){
+  if(EDITOR_MODE){const g=screenToGrid(sx,sy);edPlace(g.gx,g.gy);return;}
   if(document.querySelector('.modal-overlay.active')||document.querySelector('#levelup-overlay.active'))return;
   const w=screenToWorld(sx,sy);
   const G = getGridSize();
@@ -982,6 +1015,7 @@ function startPlaying(){
   resizeCanvas();
   generateDecorations();
   renderHUD();
+  initEditor();
   requestAnimationFrame(render);
 }
 
@@ -994,10 +1028,109 @@ function setupTitleScreen(){
   }
 }
 
+// ==================== LAYOUT EDITOR ====================
+const EDITOR_MODE = new URLSearchParams(location.search).has('editor');
+const edState = { type:'tree', variant:0, deleteMode:false, hoverGx:null, hoverGy:null };
+
+function screenToGrid(sx,sy){
+  const w=screenToWorld(sx,sy);
+  const A=2*(w.x-originX)/tileW, B=2*(w.y-originY)/tileH;
+  return{gx:Math.round((A+B)/2*10)/10, gy:Math.round((B-A)/2*10)/10};
+}
+
+function edSelect(btn){
+  edState.type=btn.dataset.type;
+  edState.variant=parseInt(btn.dataset.variant||'0');
+  edState.deleteMode=false;
+  document.querySelectorAll('#editor-panel .ed-btn').forEach(b=>b.classList.remove('selected','del-active'));
+  btn.classList.add('selected');
+}
+
+function edToggleDelete(){
+  edState.deleteMode=!edState.deleteMode;
+  document.querySelectorAll('#editor-panel .ed-btn').forEach(b=>b.classList.remove('selected','del-active'));
+  if(edState.deleteMode)document.getElementById('ed-delete').classList.add('del-active');
+}
+
+function edPlace(gx,gy){
+  if(edState.deleteMode){edRemoveNearest(gx,gy);return;}
+  if(edState.type==='house'){const i=decos.findIndex(d=>d.type==='house');if(i>=0)decos.splice(i,1);}
+  decos.push({type:edState.type,gx:Math.round(gx*10)/10,gy:Math.round(gy*10)/10,variant:edState.variant});
+  buildStaticDrawList();
+}
+
+function edRemoveNearest(gx,gy){
+  let best=-1,bestDist=2;
+  for(let i=0;i<decos.length;i++){const d=Math.hypot(decos[i].gx-gx,decos[i].gy-gy);if(d<bestDist){bestDist=d;best=i}}
+  if(best>=0){decos.splice(best,1);buildStaticDrawList();}
+}
+
+function edClearAll(){if(confirm('すべての装飾を削除しますか？')){decos.length=0;buildStaticDrawList();}}
+
+function edExport(){
+  const data=JSON.stringify(decos.map(d=>({type:d.type,gx:d.gx,gy:d.gy,...(d.variant!==undefined?{variant:d.variant}:{})})),null,2);
+  navigator.clipboard.writeText(data)
+    .then(()=>showToast('📋 クリップボードにコピーしました','success'))
+    .catch(()=>prompt('以下をコピーしてください:',data));
+}
+
+function edImport(){
+  const s=prompt('デコレーションJSONを貼り付けてください:');
+  if(!s)return;
+  try{
+    const arr=JSON.parse(s);
+    if(!Array.isArray(arr))throw new Error();
+    decos.length=0;
+    arr.forEach(d=>decos.push(d));
+    buildStaticDrawList();
+    showToast('✅ インポートしました（'+arr.length+'個）','success');
+  }catch{showToast('JSONの形式が正しくありません','warn');}
+}
+
+function renderEditorOverlay(){
+  if(!EDITOR_MODE)return;
+  // 配置済みオブジェクトの位置に点を表示
+  for(const d of decos){
+    const dp=g2s(d.gx,d.gy);
+    ctx.beginPath();ctx.arc(dp.x,dp.y-4,4,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,179,0,0.7)';ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1;ctx.stroke();
+  }
+  // ホバー座標のハイライト
+  if(edState.hoverGx===null)return;
+  const p=g2s(edState.hoverGx,edState.hoverGy);
+  const col=edState.deleteMode?'rgba(229,57,53,0.9)':'rgba(255,179,0,0.9)';
+  drawDiamond(p.x,p.y,tileW*.55,tileH*.55);
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=col;ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText('('+edState.hoverGx.toFixed(1)+','+edState.hoverGy.toFixed(1)+')',p.x,p.y-tileH*.3);
+}
+
+function initEditor(){
+  if(!EDITOR_MODE)return;
+  document.getElementById('editor-panel').classList.add('active');
+  canvas.addEventListener('mousemove',e=>{
+    if(!game||mouseDown)return;
+    const rect=canvas.getBoundingClientRect();
+    const g=screenToGrid(e.clientX-rect.left,e.clientY-rect.top);
+    edState.hoverGx=g.gx;edState.hoverGy=g.gy;
+    document.getElementById('ed-coord').textContent='gx:'+g.gx.toFixed(1)+'\ngy:'+g.gy.toFixed(1);
+  });
+  canvas.addEventListener('mouseleave',()=>{edState.hoverGx=null;edState.hoverGy=null;});
+  canvas.addEventListener('contextmenu',e=>{
+    e.preventDefault();
+    if(!game)return;
+    const rect=canvas.getBoundingClientRect();
+    const g=screenToGrid(e.clientX-rect.left,e.clientY-rect.top);
+    edRemoveNearest(g.gx,g.gy);
+  });
+}
+
 // ==================== INIT ====================
 window.addEventListener('resize',()=>{if(game)resizeCanvas()});
 generateDecorations();
 setupTitleScreen();
+if(EDITOR_MODE&&!game){game=createDefaultGame();startPlaying();}
 </script>
 </body>
 </html>
