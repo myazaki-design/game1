@@ -239,6 +239,7 @@ gy: -</div>
   <button class="ed-btn" data-type="field_f001" data-variant="0" onclick="edSelect(this)" title="field_001">🟫</button>
   <button class="ed-btn" data-type="field_f002" data-variant="0" onclick="edSelect(this)" title="field_002">◻️</button>
   <button class="ed-btn" data-type="field_f003" data-variant="0" onclick="edSelect(this)" title="field_003">🟩</button>
+  <button class="ed-btn" data-type="field_f004" data-variant="0" onclick="edSelect(this)" title="field_004 道">🛤️</button>
   <button class="ed-btn" data-type="pig_config" data-variant="0" onclick="edSelect(this)" title="豚の範囲">🐷</button>
   <div class="ed-sep"></div>
   <button class="ed-btn" id="ed-delete" onclick="edToggleDelete()" title="削除モード">✂️</button>
@@ -276,7 +277,8 @@ const SOUNDS = { gold: new Audio('assets/gold.mp3'), shop: new Audio('assets/sho
 // ==================== FIELD IMAGE (sprite sheet) ====================
 const fieldSheetImg = new Image();
 fieldSheetImg.src = 'assets/field.png';
-const FIELD_FRAMES = { f001:{x:0,y:0,w:120,h:80}, f002:{x:0,y:80,w:120,h:80}, f003:{x:0,y:160,w:120,h:80} };
+// field.json に合わせた座標（横並び: 0,120,240,360）
+const FIELD_FRAMES = { f001:{x:0,y:0,w:120,h:80}, f002:{x:120,y:0,w:120,h:80}, f003:{x:240,y:0,w:120,h:80}, f004:{x:360,y:0,w:120,h:80} };
 function drawFieldFrame(key,cx,cy,w,h){
   const f=FIELD_FRAMES[key];if(!f)return;
   if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)
@@ -331,7 +333,7 @@ loadMapObjs();
 function playSound(id){const a=SOUNDS[id];if(a){a.currentTime=0;a.play().catch(()=>{})}}
 
 // ==================== STATE ====================
-let game = null, selectedPlotIndex = -1;
+let game = null, selectedPlotIndex = -1, selectedPlotKey = null;
 let buildMode = false, buildModeCost = 0;
 
 function createDefaultGame(){
@@ -340,16 +342,17 @@ function createDefaultGame(){
     const exists = i<4;
     plots.push({exists,unlocked:exists,state:exists?'empty':null,cropId:null,plantedAt:null});
   }
-  return {coins:50,xp:0,level:1,xpToNext:20,totalHarvests:0,totalEarnings:0,rareFinds:0,plots,createdAt:Date.now()};
+  return {coins:50,xp:0,level:1,xpToNext:20,totalHarvests:0,totalEarnings:0,rareFinds:0,plots,outerPlots:{},createdAt:Date.now()};
 }
 function getXpToNext(lv){return lv*20}
 function countExistingPlots(){return game.plots.filter(p=>p.exists).length}
 function getUnlockCost(idx){const c=idx-4;return c>=0&&c<UNLOCK_COSTS.length?UNLOCK_COSTS[c]:BUILD_COST}
 
 // ==================== SAVE / LOAD ====================
-function saveGame(){if(game)localStorage.setItem('honobonoFarm',JSON.stringify(game))}
+function saveGame(){if(game){game.outerTileMap={...outerTileMap};localStorage.setItem('honobonoFarm',JSON.stringify(game))}}
 function migratePlots(){
   if(!game||!game.plots)return;
+  if(!game.outerPlots)game.outerPlots={};
   const p=game.plots;
   if(p[0]&&p[0].exists!==undefined)return;
   const migrated=[];
@@ -362,7 +365,12 @@ function migratePlots(){
 function loadGame(){const r=localStorage.getItem('honobonoFarm');if(!r)return false;try{game=JSON.parse(r);migratePlots();return true}catch{return false}}
 function hasSaveData(){return!!localStorage.getItem('honobonoFarm')}
 function deleteSave(){localStorage.removeItem('honobonoFarm')}
-function processOfflineProgress(){const now=Date.now();let n=0;for(const p of game.plots){if(!p.exists)continue;if(p.state==='growing'&&p.plantedAt&&p.cropId){const c=CROPS.find(x=>x.id===p.cropId);if(c&&now-p.plantedAt>=c.growMs){p.state='ready';n++}}}return n}
+function processOfflineProgress(){
+  const now=Date.now();let n=0;
+  for(const p of game.plots){if(!p.exists)continue;if(p.state==='growing'&&p.plantedAt&&p.cropId){const c=CROPS.find(x=>x.id===p.cropId);if(c&&now-p.plantedAt>=c.growMs){p.state='ready';n++}}}
+  for(const k of Object.keys(game.outerPlots||{})){const p=game.outerPlots[k];if(p.state==='growing'&&p.plantedAt&&p.cropId){const c=CROPS.find(x=>x.id===p.cropId);if(c&&now-p.plantedAt>=c.growMs){p.state='ready';n++}}}
+  return n;
+}
 
 // ==================== CANVAS & ISOMETRIC ====================
 const canvas = document.getElementById('game-canvas');
@@ -416,9 +424,10 @@ function recalcLayout(){
 function g2s(gx,gy){return{x:originX+(gx-gy)*tileW/2,y:originY+(gx+gy)*tileH/2}}
 function pointInDiamond(px,py,cx,cy,w,h){const dx=Math.abs(px-cx),dy=Math.abs(py-cy);return(dx/(w/2)+dy/(h/2))<=1}
 function getOuterTileAt(wx,wy){
-  const G=getGridSize();
-  for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
-    if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
+  const keys=Object.keys(outerTileMap).filter(k=>outerTileMap[k]!==null);
+  keys.sort((a,b)=>{const da=a.split(',').map(Number).reduce((x,y)=>x+y),db=b.split(',').map(Number).reduce((x,y)=>x+y);return db-da;});
+  for(const key of keys){
+    const [gx,gy]=key.split(',').map(Number);
     const p=g2s(gx,gy);
     if(pointInDiamond(wx,wy,p.x,p.y,tileW,tileH))return{gx,gy};
   }
@@ -465,16 +474,21 @@ const DECO_LAYOUT=[
   {type:'grass',gx:10.3,gy:-1.1,variant:0},
   {type:'grass',gx:10.5,gy:16.8,variant:0},
   {type:'grass',gx:16,gy:12,variant:0},
-  {type:'grass',gx:-7.8,gy:1.4,variant:0}
+  {type:'grass',gx:-7.8,gy:1.4,variant:0},
+  {type:'pig_config',minGx:-8,maxGx:-6,yConst:-4}
 ];
 
 const DEFAULT_OUTER_TILE_MAP={
-  '-1,-1':null,'0,-1':'f001','1,-1':'f001','2,-1':'f001','3,-1':'f001','4,-1':'f002','5,-1':'f002','6,-1':null,
-  '-1,0':null,'6,0':null,'-1,1':null,'6,1':null,'-1,2':null,'6,2':null,'-1,3':null,'6,3':null,'-1,4':null,'6,4':null,'-1,5':null,'6,5':null,'-1,6':null,
-  '0,6':null,'1,6':null,'2,6':null,'3,6':null,'4,6':null,'5,6':null,'6,6':null
+  '-1,-1':'f004','0,-1':'f001','1,-1':'f001','2,-1':'f001','3,-1':'f001','4,-1':'f002','5,-1':'f002','6,-1':null,
+  '-1,0':'f004','6,0':null,'-1,1':'f004','6,1':null,'-1,2':'f004','6,2':null,'-1,3':'f004','6,3':null,'-1,4':'f004','6,4':null,'-1,5':'f004','6,5':null,'-1,6':'f004',
+  '0,6':null,'1,6':null,'2,6':null,'3,6':null,'4,6':null,'5,6':null,'6,6':null,
+  '0,-2':'f004','-1,-2':'f004','1,-2':'f004','2,-2':'f004','3,-2':'f004','4,-2':'f004','5,-2':'f004','6,-2':'f004','7,-2':'f004',
+  '7,-3':'f004','8,-4':null,'7,-4':'f004','7,-5':'f004',
+  '-1,7':'f004','-1,8':null,'-1,9':null,'-2,7':'f004','-3,7':'f004','-4,7':'f004','-5,7':'f004'
 };
 
 function initOuterTiles(){
+  if(game&&game.outerTileMap&&Object.keys(game.outerTileMap).length>0){for(const k of Object.keys(outerTileMap))delete outerTileMap[k];Object.assign(outerTileMap,game.outerTileMap);return}
   if(Object.keys(outerTileMap).length===0)Object.assign(outerTileMap,DEFAULT_OUTER_TILE_MAP);
   const G=getGridSize();
   for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
@@ -501,18 +515,18 @@ function buildStaticDrawList(){
   if(tileW<=0||tileH<=0)return;
   staticDrawList.length=0;
   const G=getGridSize();
-  for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
-    if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
-    const key=gx+','+gy;
+  for(const key of Object.keys(outerTileMap)){
     const tileType=outerTileMap[key];
     if(tileType===null)continue;
+    const [gx,gy]=key.split(',').map(Number);
     const tt=tileType||'f003';
     const d=gx+gy;
     staticDrawList.push({depth:d,draw(){
       const p=g2s(gx,gy);
       if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(tt,p.x,p.y,tileW,tileH);
-      else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=tt==='f003'?'rgba(100,160,50,.18)':'rgba(139,90,43,.4)';ctx.fill()}
+      else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=tt==='f003'?'rgba(100,160,50,.18)':tt==='f004'?'rgba(120,120,120,.5)':'rgba(139,90,43,.4)';ctx.fill()}
       ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.stroke();
+      if(tt==='f001'&&game&&game.outerPlots&&game.outerPlots[key])drawOuterCropOverlay(p.x,p.y,game.outerPlots[key],Date.now());
     }});
   }
   for(let idx=0;idx<FARM_MAX;idx++){
@@ -525,12 +539,13 @@ function buildStaticDrawList(){
     staticDrawList.push({depth:dd,draw(){
       if(['tree','grass','flower','rock'].includes(d.type))drawMapObj(d);
       else if(d.type==='house')drawHouse(d);
-      else if(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003'){
+      else if(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003'||d.type==='field_f004'){
         const p=g2s(d.gx,d.gy);
-        const key=d.type.replace('field_','');
-        if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(key,p.x,p.y,tileW,tileH);
-        else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=d.type==='field_f003'?'rgba(100,160,50,.3)':'rgba(139,90,43,.4)';ctx.fill()}
+        const fkey=d.type.replace('field_','');
+        if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(fkey,p.x,p.y,tileW,tileH);
+        else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=d.type==='field_f003'?'rgba(100,160,50,.3)':d.type==='field_f004'?'rgba(120,120,120,.5)':'rgba(139,90,43,.4)';ctx.fill()}
         ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=1;drawDiamond(p.x,p.y,tileW,tileH);ctx.stroke();
+        if(fkey==='f001'&&game&&game.outerPlots&&game.outerPlots[d.gx+','+d.gy])drawOuterCropOverlay(p.x,p.y,game.outerPlots[d.gx+','+d.gy],Date.now());
       }
     }});
   }
@@ -646,6 +661,13 @@ function render(ts){
         if(c&&now-p.plantedAt>=c.growMs){p.state='ready';changed=true}
       }
     }
+    for(const k of Object.keys(game.outerPlots||{})){
+      const p=game.outerPlots[k];
+      if(p.state==='growing'&&p.plantedAt&&p.cropId){
+        const c=CROPS.find(x=>x.id===p.cropId);
+        if(c&&now-p.plantedAt>=c.growMs){p.state='ready';changed=true}
+      }
+    }
     if(changed)saveGame();
   }
 
@@ -736,6 +758,36 @@ function drawFarmTile(gx,gy,idx,now){
       ctx.fillText(crop.emoji,p.x,p.y-8);
     }
 
+  }
+}
+
+function drawOuterCropOverlay(cx,cy,plot,now){
+  if(!plot||!plot.state)return;
+  if(plot.state==='empty'){
+    ctx.font='18px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.globalAlpha=.35;ctx.fillText('➕',cx,cy-2);ctx.globalAlpha=1;
+  }else if(plot.state==='growing'){
+    const crop=CROPS.find(c=>c.id===plot.cropId);
+    if(!crop)return;
+    const elapsed=now-plot.plantedAt;
+    const prog=Math.min(1,elapsed/crop.growMs);
+    const sidx=prog<.5?0:1;
+    if(!drawCropImage(seedlingImgs[sidx],cx,cy)){
+      const emoji=prog<.33?'🌱':prog<.66?'🌿':crop.emoji;
+      const eSize=prog<.66?18:20;
+      ctx.font=eSize+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      if(prog>=.66)ctx.globalAlpha=.6;
+      ctx.fillText(emoji,cx,cy-5);
+      ctx.globalAlpha=1;
+    }
+  }else if(plot.state==='ready'){
+    const crop=CROPS.find(c=>c.id===plot.cropId);
+    if(!crop)return;
+    const harvestImg=harvestImgs[crop.id];
+    if(!harvestImg||!drawCropImage(harvestImg,cx,cy)){
+      ctx.font='24px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(crop.emoji,cx,cy-8);
+    }
   }
 }
 
@@ -842,17 +894,42 @@ canvas.addEventListener('wheel',e=>{
   camera.zoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,camera.zoom+delta));
 },{passive:false});
 
+function getOuterTileType(gx,gy){
+  const key=gx+','+gy;
+  if(outerTileMap[key])return outerTileMap[key];
+  const deco=decos.find(d=>(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003')&&d.gx===gx&&d.gy===gy);
+  return deco?deco.type.replace('field_',''):null;
+}
+
 function handleTap(sx,sy){
   if(EDITOR_MODE){const g=screenToGrid(sx,sy);edPlace(g.gx,g.gy,sx,sy);return;}
   if(document.querySelector('.modal-overlay.active')||document.querySelector('#levelup-overlay.active'))return;
   const w=screenToWorld(sx,sy);
   const G = getGridSize();
-  for(let idx=FARM_MAX-1;idx>=0;idx--){
+  const tapTargets=[];
+  for(let idx=0;idx<FARM_MAX;idx++){
     const gx=idx%G,gy=Math.floor(idx/G);
     const p=g2s(gx,gy);
-    if(pointInDiamond(w.x,w.y,p.x,p.y,tileW,tileH)){
-      highlightTile={gx,gy,time:Date.now()};
-      const plot=game.plots[idx];
+    if(pointInDiamond(w.x,w.y,p.x,p.y,tileW,tileH))tapTargets.push({depth:gx+gy,type:'farm',idx,gx,gy});
+  }
+  for(const key of Object.keys(outerTileMap)){
+    if(outerTileMap[key]===null)continue;
+    const [gx,gy]=key.split(',').map(Number);
+    const p=g2s(gx,gy);
+    if(pointInDiamond(w.x,w.y,p.x,p.y,tileW,tileH))tapTargets.push({depth:gx+gy,type:'outer',key,gx,gy});
+  }
+  for(const d of decos){
+    if(d.type!=='field_f001'&&d.type!=='field_f002'&&d.type!=='field_f003')continue;
+    const key=d.gx+','+d.gy;
+    if(tapTargets.some(t=>t.key===key||(t.gx===d.gx&&t.gy===d.gy)))continue;
+    const p=g2s(d.gx,d.gy);
+    if(pointInDiamond(w.x,w.y,p.x,p.y,tileW,tileH))tapTargets.push({depth:d.gx+d.gy,type:'outer',key,gx:d.gx,gy:d.gy});
+  }
+  tapTargets.sort((a,b)=>b.depth-a.depth);
+  for(const t of tapTargets){
+    if(t.type==='farm'){
+      highlightTile={gx:t.gx,gy:t.gy,time:Date.now()};
+      const plot=game.plots[t.idx];
       if(!plot.exists){
         if(buildMode){
           if(game.coins<buildModeCost){showToast('コインが足りません！','warn');return}
@@ -861,8 +938,30 @@ function handleTap(sx,sy){
           playSound('shop');saveGame();renderHUD();resizeCanvas();generateDecorations();
           showToast('🌿 畑を建設しました！','success');
         }else showToast('🏗️ 建設ボタンから畑を建設できます','info');
-      }else onPlotClick(idx);
+      }else onPlotClick(t.idx);
       return;
+    }
+    if(t.type==='outer'){
+      const tt=getOuterTileType(t.gx,t.gy);
+      if(tt==='f001'){
+        highlightTile={gx:t.gx,gy:t.gy,time:Date.now()};
+        onOuterPlotClick(t.key);
+        return;
+      }
+      if(tt==='f002'){
+        highlightTile={gx:t.gx,gy:t.gy,time:Date.now()};
+        if(buildMode){
+          if(game.coins<buildModeCost){showToast('コインが足りません！','warn');return}
+          if(!game.outerPlots)game.outerPlots={};
+          game.outerPlots[t.key]={state:'empty',cropId:null,plantedAt:null};
+          outerTileMap[t.key]='f001';
+          if(decos.some(d=>d.type==='field_f002'&&d.gx===t.gx&&d.gy===t.gy)){const d=decos.find(x=>x.type==='field_f002'&&x.gx===t.gx&&x.gy===t.gy);if(d)d.type='field_f001';}
+          game.coins-=buildModeCost;buildMode=false;buildModeCost=0;
+          playSound('shop');saveGame();renderHUD();buildStaticDrawList();
+          showToast('🌿 畑を建設しました！','success');
+        }else showToast('🏗️ 建設ボタンから畑を建設できます','info');
+        return;
+      }
     }
   }
   if(buildMode){buildMode=false;buildModeCost=0;renderHUD();showToast('建設をキャンセルしました','info')}
@@ -876,13 +975,27 @@ function onPlotClick(idx){
   else if(plot.state==='ready')harvestCrop(idx);
 }
 
+function onOuterPlotClick(key){
+  if(!game.outerPlots)game.outerPlots={};
+  let plot=game.outerPlots[key];
+  if(!plot){plot={state:'empty',cropId:null,plantedAt:null};game.outerPlots[key]=plot;}
+  if(plot.state==='empty')openCropSelectForOuter(key);
+  else if(plot.state==='ready')harvestCropOuter(key);
+}
+
 function plantCrop(plotIdx,cropId){
   const crop=CROPS.find(c=>c.id===cropId);
   if(!crop||game.coins<crop.cost){showToast('💰 コインが足りません！','warn');return}
   if(game.level<crop.reqLv)return;
   game.coins-=crop.cost;
-  const plot=game.plots[plotIdx];
-  plot.state='growing';plot.cropId=cropId;plot.plantedAt=Date.now();
+  if(selectedPlotKey!==null){
+    if(!game.outerPlots)game.outerPlots={};
+    game.outerPlots[selectedPlotKey]={state:'growing',cropId:cropId,plantedAt:Date.now()};
+    selectedPlotKey=null;
+  }else{
+    const plot=game.plots[plotIdx];
+    plot.state='growing';plot.cropId=cropId;plot.plantedAt=Date.now();
+  }
   playSound('shop');
   closeModal('modal-crop-select');saveGame();renderHUD();
   showToast(crop.emoji+' '+crop.name+'の種を植えました！','info');
@@ -898,6 +1011,32 @@ function harvestCrop(idx){
   plot.state='empty';plot.cropId=null;plot.plantedAt=null;
 
   const gx=idx%getGridSize(),gy=Math.floor(idx/getGridSize());
+  const wp=g2s(gx,gy);
+  const sp=worldToScreen(wp.x,wp.y);
+  const rect=canvas.getBoundingClientRect();
+  const cx=rect.left+sp.x,cy=rect.top+sp.y;
+  spawnHarvestPop(cx,cy,crop.emoji);
+  spawnCoinParticles(cx,cy,Math.min(8,Math.ceil(sellPrice/15)));
+  spawnXpFloat(cx,cy-20,'+'+crop.xp+' XP');
+
+  playSound('gold');
+  if(quality.id!=='normal'){
+    game.rareFinds++;showQualityFlash(quality.color);
+    showToast(quality.name+'！ '+crop.emoji+' '+crop.name+' → 💰 '+sellPrice,quality.id==='gold'?'rare':'gold');
+  }else{showToast(crop.emoji+' 収穫！ → 💰 '+sellPrice,'success')}
+  addXP(crop.xp);saveGame();renderHUD();
+}
+
+function harvestCropOuter(key){
+  const plot=game.outerPlots&&game.outerPlots[key];
+  if(!plot||plot.state!=='ready')return;
+  const crop=CROPS.find(c=>c.id===plot.cropId);if(!crop)return;
+  const quality=rollQuality();
+  const sellPrice=Math.floor(crop.sell*quality.mult);
+  game.coins+=sellPrice;game.totalHarvests++;game.totalEarnings+=sellPrice;
+  plot.state='empty';plot.cropId=null;plot.plantedAt=null;
+
+  const [gx,gy]=key.split(',').map(Number);
   const wp=g2s(gx,gy);
   const sp=worldToScreen(wp.x,wp.y);
   const rect=canvas.getBoundingClientRect();
@@ -980,11 +1119,27 @@ function confirmBuild(optionIndex){
 
 // ==================== MODALS ====================
 function openCropSelect(idx){
-  selectedPlotIndex=idx;const list=document.getElementById('crop-list');let html='';
+  selectedPlotIndex=idx;selectedPlotKey=null;
+  const list=document.getElementById('crop-list');let html='';
   for(const crop of CROPS){
     const locked=game.level<crop.reqLv,cantAfford=game.coins<crop.cost,disabled=locked||cantAfford;
     const gt=crop.growMs>=60000?Math.floor(crop.growMs/60000)+'分':(crop.growMs/1000)+'秒';
     html+='<div class="crop-option'+(disabled?' disabled':'')+'" onclick="'+(disabled?'':"plantCrop("+idx+",'"+crop.id+"')")+'">'
+      +'<span class="crop-emoji-lg">'+(locked?'🔒':crop.emoji)+'</span>'
+      +'<div class="crop-info"><div class="crop-name">'+crop.name+(locked?' (Lv.'+crop.reqLv+'で解放)':'')+'</div>'
+      +'<div class="crop-detail">⏱ '+gt+'　→　<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+crop.sell+'　📊 '+crop.xp+'XP</div></div>'
+      +'<div class="crop-price'+(cantAfford&&!locked?' cant-afford':'')+'">'+(locked?'':'<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+crop.cost)+'</div></div>';
+  }
+  list.innerHTML=html;openModal('modal-crop-select');
+}
+
+function openCropSelectForOuter(key){
+  selectedPlotKey=key;selectedPlotIndex=-1;
+  const list=document.getElementById('crop-list');let html='';
+  for(const crop of CROPS){
+    const locked=game.level<crop.reqLv,cantAfford=game.coins<crop.cost,disabled=locked||cantAfford;
+    const gt=crop.growMs>=60000?Math.floor(crop.growMs/60000)+'分':(crop.growMs/1000)+'秒';
+    html+='<div class="crop-option'+(disabled?' disabled':'')+'" onclick="'+(disabled?'':"plantCrop(-1,'"+crop.id+"')")+'">'
       +'<span class="crop-emoji-lg">'+(locked?'🔒':crop.emoji)+'</span>'
       +'<div class="crop-info"><div class="crop-name">'+crop.name+(locked?' (Lv.'+crop.reqLv+'で解放)':'')+'</div>'
       +'<div class="crop-detail">⏱ '+gt+'　→　<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+crop.sell+'　📊 '+crop.xp+'XP</div></div>'
@@ -1008,8 +1163,8 @@ function openShop(){
 }
 function openInfo(){openModal('modal-info')}
 function openModal(id){document.getElementById(id).classList.add('active')}
-function closeModal(id){document.getElementById(id).classList.remove('active');selectedPlotIndex=-1}
-document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay')&&e.target.classList.contains('active')){e.target.classList.remove('active');selectedPlotIndex=-1}});
+function closeModal(id){document.getElementById(id).classList.remove('active');selectedPlotIndex=-1;selectedPlotKey=null}
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay')&&e.target.classList.contains('active')){e.target.classList.remove('active');selectedPlotIndex=-1;selectedPlotKey=null}});
 
 // ==================== HUD ====================
 function renderHUD(){
@@ -1119,8 +1274,9 @@ function edPlace(gx,gy,sx,sy){
   const G=getGridSize();
   const gxi=Math.round(gx),gyi=Math.round(gy);
   const isOuter=gxi<0||gxi>=G||gyi<0||gyi>=G;
-  if(['field_f001','field_f002','field_f003'].includes(edState.type)&&isOuter){
-    outerTileMap[gxi+','+gyi]=edState.type.replace('field_','');
+  if(['field_f001','field_f002','field_f003','field_f004'].includes(edState.type)){
+    if(isOuter)outerTileMap[gxi+','+gyi]=edState.type.replace('field_','');
+    else decos.push({type:edState.type,gx:Math.round(gx*10)/10,gy:Math.round(gy*10)/10,variant:edState.variant});
     buildStaticDrawList();
     return;
   }

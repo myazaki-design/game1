@@ -10,7 +10,7 @@
 },
 "field_002.png":
 {
-	"frame": {"x":0,"y":80,"w":120,"h":80},
+	"frame": {"x":120,"y":0,"w":120,"h":80},
 	"rotated": false,
 	"trimmed": false,
 	"spriteSourceSize": {"x":0,"y":0,"w":120,"h":80},
@@ -18,7 +18,15 @@
 },
 "field_003.png":
 {
-	"frame": {"x":0,"y":160,"w":120,"h":80},
+	"frame": {"x":240,"y":0,"w":120,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":120,"h":80},
+	"sourceSize": {"w":120,"h":80}
+},
+"field_004.png":
+{
+	"frame": {"x":360,"y":0,"w":120,"h":80},
 	"rotated": false,
 	"trimmed": false,
 	"spriteSourceSize": {"x":0,"y":0,"w":120,"h":80},
@@ -29,8 +37,8 @@
 	"version": "1.0",
 	"image": "field.png",
 	"format": "RGBA8888",
-	"size": {"w":120,"h":240},
+	"size": {"w":480,"h":80},
 	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:c6e5f62330b6796aa0aad68ec6e2c038:8d7bc47a28814e5f85cc1b73d39ed9fa:c5ad27798db7edcd57b70f4c6c159424$"
+	"smartupdate": "$TexturePacker:SmartUpdate:4b6b3ed9fe74b22534a40790db23ee8e:62214b4938a0181b6c61447fda45f64c:c5ad27798db7edcd57b70f4c6c159424$"
 }
 }
