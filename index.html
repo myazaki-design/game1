@@ -309,7 +309,7 @@ const PIG_FRAMES = [{x:0,y:0,w:300,h:300},{x:300,y:0,w:300,h:300},{x:0,y:300,w:3
 const PIG_FRAME_MS = 200;
 const PIG_SPEED = 0.35;
 const PIG_Y_CONST = 11;
-const PIG_VISIBLE = false;
+const PIG_VISIBLE = true;
 const pigState = { gx:4.5, gy:6.5, dir:1, frameIndex:0, lastFrameTime:0 };
 let pigConfig = { minGx:4.5, maxGx:6.5, yConst:11 };
 let outerTileMap = {};
@@ -475,7 +475,7 @@ const DECO_LAYOUT=[
   {type:'grass',gx:10.5,gy:16.8,variant:0},
   {type:'grass',gx:16,gy:12,variant:0},
   {type:'grass',gx:-7.8,gy:1.4,variant:0},
-  {type:'pig_config',minGx:-8,maxGx:-6,yConst:-4}
+  {type:'pig_config',minGx:6,maxGx:8,yConst:20}
 ];
 
 const DEFAULT_OUTER_TILE_MAP={
