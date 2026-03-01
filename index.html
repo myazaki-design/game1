@@ -261,17 +261,17 @@ const CROPS = [
   { id:'strawberry', name:'いちご',       emoji:'🍓', growMs:180000, cost:80,  sell:190, xp:55,  reqLv:10 },
   { id:'pumpkin',    name:'かぼちゃ',     emoji:'🎃', growMs:300000, cost:150, sell:360, xp:100, reqLv:15 },
 ];
-const UNLOCK_COSTS = [30,30,50,50,100,100,200,200,400,400,800,800];
 const QUALITIES = [
   { id:'normal',name:'',mult:1,chance:.80,color:null },
   { id:'silver',name:'⭐高品質',mult:1.5,chance:.15,color:'rgba(192,192,192,0.3)' },
   { id:'gold',name:'🌟プレミアム',mult:3,chance:.05,color:'rgba(255,215,0,0.35)' },
 ];
 const GRID = 6;
-const FARM_MAX = 36;
 const BUILD_COST = 30;
 const BUILD_OPTIONS = [{ name:'畑1マス', cost:BUILD_COST, plots:1 }];
 function getGridSize(){ return GRID }
+function countBuildablePlots(){ return Object.keys(outerTileMap).filter(k=>outerTileMap[k]==='f002').length }
+function getMaxFarmPlots(){ return Object.keys(outerTileMap).filter(k=>outerTileMap[k]==='f001'||outerTileMap[k]==='f002').length }
 
 // ==================== SOUND ====================
 const SOUNDS = { gold: new Audio('assets/gold.mp3'), shop: new Audio('assets/shop.mp3') };
@@ -335,37 +335,23 @@ let game = null, selectedPlotIndex = -1, selectedPlotKey = null;
 let buildMode = false, buildModeCost = 0;
 
 function createDefaultGame(){
-  const plots=[];
-  for(let i=0;i<FARM_MAX;i++){
-    const exists = i<4;
-    plots.push({exists,unlocked:exists,state:exists?'empty':null,cropId:null,plantedAt:null});
-  }
-  return {coins:50,xp:0,level:1,xpToNext:20,totalHarvests:0,totalEarnings:0,rareFinds:0,plots,outerPlots:{},createdAt:Date.now()};
+  return {coins:50,xp:0,level:1,xpToNext:20,totalHarvests:0,totalEarnings:0,rareFinds:0,outerPlots:{},createdAt:Date.now()};
 }
 function getXpToNext(lv){return lv*20}
-function countExistingPlots(){return game.plots.filter(p=>p.exists).length}
-function getUnlockCost(idx){const c=idx-4;return c>=0&&c<UNLOCK_COSTS.length?UNLOCK_COSTS[c]:BUILD_COST}
+function countExistingPlots(){return Object.keys(game.outerPlots||{}).length}
 
 // ==================== SAVE / LOAD ====================
 function saveGame(){if(game){game.outerTileMap={...outerTileMap};localStorage.setItem('honobonoFarm',JSON.stringify(game))}}
 function migratePlots(){
-  if(!game||!game.plots)return;
+  if(!game)return;
   if(!game.outerPlots)game.outerPlots={};
-  const p=game.plots;
-  if(p[0]&&p[0].exists!==undefined)return;
-  const migrated=[];
-  for(let i=0;i<FARM_MAX;i++){
-    if(i<p.length)migrated.push({exists:true,unlocked:p[i].unlocked,state:p[i].state,cropId:p[i].cropId,plantedAt:p[i].plantedAt});
-    else migrated.push({exists:false,unlocked:false,state:null,cropId:null,plantedAt:null});
-  }
-  game.plots=migrated;
+  if(game.plots){delete game.plots;}
 }
 function loadGame(){const r=localStorage.getItem('honobonoFarm');if(!r)return false;try{game=JSON.parse(r);migratePlots();return true}catch{return false}}
 function hasSaveData(){return!!localStorage.getItem('honobonoFarm')}
 function deleteSave(){localStorage.removeItem('honobonoFarm')}
 function processOfflineProgress(){
   const now=Date.now();let n=0;
-  for(const p of game.plots){if(!p.exists)continue;if(p.state==='growing'&&p.plantedAt&&p.cropId){const c=CROPS.find(x=>x.id===p.cropId);if(c&&now-p.plantedAt>=c.growMs){p.state='ready';n++}}}
   for(const k of Object.keys(game.outerPlots||{})){const p=game.outerPlots[k];if(p.state==='growing'&&p.plantedAt&&p.cropId){const c=CROPS.find(x=>x.id===p.cropId);if(c&&now-p.plantedAt>=c.growMs){p.state='ready';n++}}}
   return n;
 }
@@ -508,7 +494,8 @@ const DECO_LAYOUT=[
   {type:'grass',gx:12.7,gy:13.1,variant:0},
   {type:'grass',gx:0.3,gy:7.3,variant:0},
   {type:'grass',gx:-4.5,gy:1.2,variant:0},
-  {type:'grass',gx:12.4,gy:6.8,variant:0}
+  {type:'grass',gx:12.4,gy:6.8,variant:0},
+  {type:'house',gx:3,gy:-5.4,variant:1}
 ];
 
 const DEFAULT_OUTER_TILE_MAP={
@@ -524,13 +511,6 @@ const DEFAULT_OUTER_TILE_MAP={
 function initOuterTiles(){
   if(game&&game.outerTileMap&&Object.keys(game.outerTileMap).length>0){for(const k of Object.keys(outerTileMap))delete outerTileMap[k];Object.assign(outerTileMap,game.outerTileMap);return}
   if(Object.keys(outerTileMap).length===0)Object.assign(outerTileMap,DEFAULT_OUTER_TILE_MAP);
-  if(EDITOR_MODE)return;
-  const G=getGridSize();
-  for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
-    if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
-    const key=gx+','+gy;
-    if(outerTileMap[key]===undefined)outerTileMap[key]='f003';
-  }
 }
 
 function applyPigConfig(){
@@ -566,12 +546,6 @@ function buildStaticDrawList(){
       ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.stroke();
       if(tt==='f001'&&game&&game.outerPlots&&game.outerPlots[key])drawOuterCropOverlay(p.x,p.y,game.outerPlots[key],Date.now());
     }});
-  }
-  if(!EDITOR_MODE){
-    for(let idx=0;idx<FARM_MAX;idx++){
-      const gx=idx%G,gy=Math.floor(idx/G);
-      staticDrawList.push({depth:gx+gy+.05,gx,gy,draw(){drawFarmTile(gx,gy,idx,Date.now())}});
-    }
   }
   for(const d of decos){
     if(d.type==='pig_config')continue;
@@ -700,12 +674,6 @@ function render(ts){
   if(now-lastGrowthCheck>=GROWTH_CHECK_INTERVAL){
     lastGrowthCheck=now;
     let changed=false;
-    for(const p of game.plots){
-      if(p.state==='growing'&&p.plantedAt&&p.cropId){
-        const c=CROPS.find(x=>x.id===p.cropId);
-        if(c&&now-p.plantedAt>=c.growMs){p.state='ready';changed=true}
-      }
-    }
     for(const k of Object.keys(game.outerPlots||{})){
       const p=game.outerPlots[k];
       if(p.state==='growing'&&p.plantedAt&&p.cropId){
@@ -741,75 +709,6 @@ function render(ts){
   renderEditorOverlay();
 
   ctx.restore();
-}
-
-function drawFarmTile(gx,gy,idx,now){
-  const p=g2s(gx,gy);const plot=game.plots[idx];
-  if(!plot)return;
-  const farmKey=gx+','+gy;
-  const customTile=outerTileMap[farmKey];
-
-  if(!plot.exists){
-    const tile=customTile||'f002';
-    if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0){
-      if(buildMode){ctx.save();ctx.filter='brightness(1.1)';}
-      drawFieldFrame(tile,p.x,p.y,tileW,tileH);
-      if(buildMode)ctx.restore();
-    }else{
-      drawDiamond(p.x,p.y,tileW*.96,tileH*.96);
-      ctx.fillStyle=buildMode?'rgba(255,235,59,.25)':'rgba(100,160,50,.15)';ctx.fill();
-    }
-    ctx.strokeStyle=buildMode?'rgba(255,193,7,.6)':'rgba(0,0,0,.08)';ctx.lineWidth=buildMode?2:1;
-    drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.stroke();
-    return;
-  }
-
-  if(!plot.unlocked){
-    drawFlatTile(p.x,p.y,'#BDBDBD',true,false,customTile);
-    ctx.font='16px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText('🔒',p.x,p.y-3);
-    ctx.font='bold 8px var(--font)';ctx.fillStyle='#616161';
-    if(goldImg.complete&&goldImg.naturalWidth>0){
-      const gw=14,gh=14,cost=getUnlockCost(idx);
-      ctx.drawImage(goldImg,p.x-12,p.y+tileH*.35-gh/2-2,gw,gh);
-      ctx.textAlign='left';ctx.fillText(cost,p.x+2,p.y+tileH*.35);ctx.textAlign='center';
-    }else ctx.fillText('💰'+getUnlockCost(idx),p.x,p.y+tileH*.35);
-    return;
-  }
-
-  drawFlatTile(p.x,p.y,'#A1887F',false,plot.state==='ready',customTile);
-  drawSoilLines(p.x,p.y);
-
-  if(plot.state==='empty'){
-    ctx.font='18px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.globalAlpha=.35;ctx.fillText('➕',p.x,p.y-2);ctx.globalAlpha=1;
-  }
-  else if(plot.state==='growing'){
-    const crop=CROPS.find(c=>c.id===plot.cropId);
-    if(!crop)return;
-    const elapsed=now-plot.plantedAt;
-    const prog=Math.min(1,elapsed/crop.growMs);
-
-    const sidx=prog<.5?0:1;
-    if(!drawCropImage(seedlingImgs[sidx],p.x,p.y)){
-      const emoji=prog<.33?'🌱':prog<.66?'🌿':crop.emoji;
-      const eSize=prog<.66?18:20;
-      ctx.font=eSize+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      if(prog>=.66)ctx.globalAlpha=.6;
-      ctx.fillText(emoji,p.x,p.y-5);
-      ctx.globalAlpha=1;
-    }
-  }
-  else if(plot.state==='ready'){
-    const crop=CROPS.find(c=>c.id===plot.cropId);
-    if(!crop)return;
-    const harvestImg=harvestImgs[crop.id];
-    if(!harvestImg||!drawCropImage(harvestImg,p.x,p.y)){
-      ctx.font='24px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(crop.emoji,p.x,p.y-8);
-    }
-
-  }
 }
 
 function drawOuterCropOverlay(cx,cy,plot,now){
@@ -956,13 +855,7 @@ function handleTap(sx,sy){
   if(EDITOR_MODE){const g=screenToGrid(sx,sy);edPlace(g.gx,g.gy,sx,sy);return;}
   if(document.querySelector('.modal-overlay.active')||document.querySelector('#levelup-overlay.active'))return;
   const w=screenToWorld(sx,sy);
-  const G = getGridSize();
   const tapTargets=[];
-  for(let idx=0;idx<FARM_MAX;idx++){
-    const gx=idx%G,gy=Math.floor(idx/G);
-    const p=g2s(gx,gy);
-    if(pointInDiamond(w.x,w.y,p.x,p.y,tileW,tileH))tapTargets.push({depth:gx+gy,type:'farm',idx,gx,gy});
-  }
   for(const key of Object.keys(outerTileMap)){
     if(outerTileMap[key]===null)continue;
     const [gx,gy]=key.split(',').map(Number);
@@ -978,20 +871,6 @@ function handleTap(sx,sy){
   }
   tapTargets.sort((a,b)=>b.depth-a.depth);
   for(const t of tapTargets){
-    if(t.type==='farm'){
-      highlightTile={gx:t.gx,gy:t.gy,time:Date.now()};
-      const plot=game.plots[t.idx];
-      if(!plot.exists){
-        if(buildMode){
-          if(game.coins<buildModeCost){showToast('コインが足りません！','warn');return}
-          plot.exists=true;plot.unlocked=true;plot.state='empty';plot.cropId=null;plot.plantedAt=null;
-          game.coins-=buildModeCost;buildMode=false;buildModeCost=0;
-          playSound('shop');saveGame();renderHUD();resizeCanvas();generateDecorations();
-          showToast('🌿 畑を建設しました！','success');
-        }else showToast('🏗️ 建設ボタンから畑を建設できます','info');
-      }else onPlotClick(t.idx);
-      return;
-    }
     if(t.type==='outer'){
       const tt=getOuterTileType(t.gx,t.gy);
       if(tt==='f001'){
@@ -1019,13 +898,6 @@ function handleTap(sx,sy){
 }
 
 // ==================== GAME LOGIC ====================
-function onPlotClick(idx){
-  const plot=game.plots[idx];
-  if(!plot.unlocked)openUnlockModal(idx);
-  else if(plot.state==='empty')openCropSelect(idx);
-  else if(plot.state==='ready')harvestCrop(idx);
-}
-
 function onOuterPlotClick(key){
   if(!game.outerPlots)game.outerPlots={};
   let plot=game.outerPlots[key];
@@ -1038,44 +910,14 @@ function plantCrop(plotIdx,cropId){
   const crop=CROPS.find(c=>c.id===cropId);
   if(!crop||game.coins<crop.cost){showToast('💰 コインが足りません！','warn');return}
   if(game.level<crop.reqLv)return;
+  if(!selectedPlotKey){closeModal('modal-crop-select');return}
   game.coins-=crop.cost;
-  if(selectedPlotKey!==null){
-    if(!game.outerPlots)game.outerPlots={};
-    game.outerPlots[selectedPlotKey]={state:'growing',cropId:cropId,plantedAt:Date.now()};
-    selectedPlotKey=null;
-  }else{
-    const plot=game.plots[plotIdx];
-    plot.state='growing';plot.cropId=cropId;plot.plantedAt=Date.now();
-  }
+  if(!game.outerPlots)game.outerPlots={};
+  game.outerPlots[selectedPlotKey]={state:'growing',cropId:cropId,plantedAt:Date.now()};
+  selectedPlotKey=null;
   playSound('shop');
   closeModal('modal-crop-select');saveGame();renderHUD();
   showToast(crop.emoji+' '+crop.name+'の種を植えました！','info');
-}
-
-function harvestCrop(idx){
-  const plot=game.plots[idx];
-  if(plot.state!=='ready')return;
-  const crop=CROPS.find(c=>c.id===plot.cropId);if(!crop)return;
-  const quality=rollQuality();
-  const sellPrice=Math.floor(crop.sell*quality.mult);
-  game.coins+=sellPrice;game.totalHarvests++;game.totalEarnings+=sellPrice;
-  plot.state='empty';plot.cropId=null;plot.plantedAt=null;
-
-  const gx=idx%getGridSize(),gy=Math.floor(idx/getGridSize());
-  const wp=g2s(gx,gy);
-  const sp=worldToScreen(wp.x,wp.y);
-  const rect=canvas.getBoundingClientRect();
-  const cx=rect.left+sp.x,cy=rect.top+sp.y;
-  spawnHarvestPop(cx,cy,crop.emoji);
-  spawnCoinParticles(cx,cy,Math.min(8,Math.ceil(sellPrice/15)));
-  spawnXpFloat(cx,cy-20,'+'+crop.xp+' XP');
-
-  playSound('gold');
-  if(quality.id!=='normal'){
-    game.rareFinds++;showQualityFlash(quality.color);
-    showToast(quality.name+'！ '+crop.emoji+' '+crop.name+' → 💰 '+sellPrice,quality.id==='gold'?'rare':'gold');
-  }else{showToast(crop.emoji+' 収穫！ → 💰 '+sellPrice,'success')}
-  addXP(crop.xp);saveGame();renderHUD();
 }
 
 function harvestCropOuter(key){
@@ -1121,32 +963,17 @@ function showLevelUp(){
 }
 function closeLevelUp(){document.getElementById('levelup-overlay').classList.remove('active');saveGame();renderHUD()}
 
-function openUnlockModal(idx){
-  selectedPlotIndex=idx;const cost=getUnlockCost(idx);
-  document.getElementById('unlock-cost-text').innerHTML='<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+cost;
-  const btn=document.getElementById('unlock-btn');
-  btn.disabled=game.coins<cost;btn.textContent=game.coins<cost?'コインが足りない…':'開拓する！';
-  openModal('modal-unlock');
-}
-function confirmUnlock(){
-  if(selectedPlotIndex<0)return;const cost=getUnlockCost(selectedPlotIndex);
-  if(game.coins<cost){showToast('💰 コインが足りません！','warn');return}
-  game.coins-=cost;game.plots[selectedPlotIndex].unlocked=true;
-  playSound('shop');
-  closeModal('modal-unlock');saveGame();renderHUD();
-  showToast('🌿 新しい畑を開拓しました！','success');
-}
-
+function confirmUnlock(){}
 function openBuildModal(){
   if(buildMode){buildMode=false;buildModeCost=0;renderHUD();showToast('建設をキャンセルしました','info');return}
   document.getElementById('build-farm-current').textContent=countExistingPlots();
-  document.getElementById('build-farm-max').textContent=FARM_MAX;
+  document.getElementById('build-farm-max').textContent=getMaxFarmPlots();
   const list=document.getElementById('build-list');
   let html='';
-  const canBuild=countExistingPlots()<FARM_MAX;
+  const canBuild=countBuildablePlots()>0;
   for(let i=0;i<BUILD_OPTIONS.length;i++){
     const opt=BUILD_OPTIONS[i];
-    const wouldExceed=countExistingPlots()+opt.plots>FARM_MAX;
+    const wouldExceed=countExistingPlots()>=getMaxFarmPlots();
     const cantAfford=game.coins<opt.cost;
     const disabled=!canBuild||wouldExceed||cantAfford;
     html+='<div class="crop-option'+(disabled?' disabled':'')+'" onclick="'+(disabled?'':"confirmBuild("+i+")")+'">'
@@ -1160,7 +987,8 @@ function openBuildModal(){
 function confirmBuild(optionIndex){
   const opt=BUILD_OPTIONS[optionIndex];
   if(!opt)return;
-  if(countExistingPlots()>=FARM_MAX){showToast('🏗️ 建設上限に達しています','warn');return}
+  if(countBuildablePlots()<=0){showToast('🏗️ 建設できる場所がありません','warn');return}
+  if(countExistingPlots()>=getMaxFarmPlots()){showToast('🏗️ 建設上限に達しています','warn');return}
   if(game.coins<opt.cost){showToast('💰 コインが足りません！','warn');return}
   closeModal('modal-build');
   buildMode=true;buildModeCost=opt.cost;
@@ -1169,21 +997,6 @@ function confirmBuild(optionIndex){
 }
 
 // ==================== MODALS ====================
-function openCropSelect(idx){
-  selectedPlotIndex=idx;selectedPlotKey=null;
-  const list=document.getElementById('crop-list');let html='';
-  for(const crop of CROPS){
-    const locked=game.level<crop.reqLv,cantAfford=game.coins<crop.cost,disabled=locked||cantAfford;
-    const gt=crop.growMs>=60000?Math.floor(crop.growMs/60000)+'分':(crop.growMs/1000)+'秒';
-    html+='<div class="crop-option'+(disabled?' disabled':'')+'" onclick="'+(disabled?'':"plantCrop("+idx+",'"+crop.id+"')")+'">'
-      +'<span class="crop-emoji-lg">'+(locked?'🔒':crop.emoji)+'</span>'
-      +'<div class="crop-info"><div class="crop-name">'+crop.name+(locked?' (Lv.'+crop.reqLv+'で解放)':'')+'</div>'
-      +'<div class="crop-detail">⏱ '+gt+'　→　<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+crop.sell+'　📊 '+crop.xp+'XP</div></div>'
-      +'<div class="crop-price'+(cantAfford&&!locked?' cant-afford':'')+'">'+(locked?'':'<img src="assets/gold.png" alt="" class="coin-icon-inline"> '+crop.cost)+'</div></div>';
-  }
-  list.innerHTML=html;openModal('modal-crop-select');
-}
-
 function openCropSelectForOuter(key){
   selectedPlotKey=key;selectedPlotIndex=-1;
   const list=document.getElementById('crop-list');let html='';
@@ -1221,7 +1034,7 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('modal-over
 function renderHUD(){
   document.getElementById('level-display').textContent=game.level;
   document.getElementById('farm-display').textContent=countExistingPlots();
-  document.getElementById('farm-max-display').textContent=FARM_MAX;
+  document.getElementById('farm-max-display').textContent=getMaxFarmPlots();
   document.getElementById('btn-build').textContent=buildMode?'❌ キャンセル':'🏗️ 建設';
   document.getElementById('coins-display').textContent=game.coins.toLocaleString();
   document.getElementById('harvests-display').textContent=game.totalHarvests;
@@ -1339,7 +1152,6 @@ function edPlace(gx,gy,sx,sy){
     buildStaticDrawList();
     return;
   }
-  if(edState.type==='house'){const i=decos.findIndex(d=>d.type==='house');if(i>=0)decos.splice(i,1);}
   const ngx=Math.round(gx*10)/10,ngy=Math.round(gy*10)/10;
   const dup=decos.findIndex(d=>d.type===edState.type&&d.variant===edState.variant&&Math.abs(d.gx-ngx)<0.15&&Math.abs(d.gy-ngy)<0.15);
   if(dup>=0)return;
