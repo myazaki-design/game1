@@ -721,9 +721,16 @@ canvas.addEventListener('touchmove',e=>{
   e.preventDefault();
   if(e.touches.length===2){
     const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
+    const rect=canvas.getBoundingClientRect();
+    const cx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left-W/2;
+    const cy=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top-H/2;
     if(lastPinchDist>0){
-      camera.zoom*=d/lastPinchDist;
-      camera.zoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,camera.zoom));
+      const scale=d/lastPinchDist;
+      const newZoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,camera.zoom*scale));
+      const actualScale=newZoom/camera.zoom;
+      camera.x=Math.max(-PAN_MAX,Math.min(PAN_MAX,cx-actualScale*(cx-camera.x)));
+      camera.y=Math.max(-PAN_MAX,Math.min(PAN_MAX,cy-actualScale*(cy-camera.y)));
+      camera.zoom=newZoom;
     }
     lastPinchDist=d;
     touchStart=null;
@@ -747,7 +754,11 @@ canvas.addEventListener('touchend',e=>{
     }
     touchStart=null;dragStart=null;lastPinchDist=0;
   }else if(e.touches.length===2)lastPinchDist=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
-  else if(e.touches.length===1)touchStart=null;
+  else if(e.touches.length===1){
+    touchStart=null;
+    dragStart={x:camera.x,y:camera.y,startX:e.touches[0].clientX,startY:e.touches[0].clientY};
+    isDragging=false;
+  }
 },{passive:false});
 
 canvas.addEventListener('touchcancel',e=>{touchStart=null;dragStart=null;lastPinchDist=0},{passive:false});
