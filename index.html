@@ -236,6 +236,11 @@ gy: -</div>
   <button class="ed-btn" data-type="grass" data-variant="1" onclick="edSelect(this)" title="草②">🍃</button>
   <button class="ed-btn" data-type="house" data-variant="0" onclick="edSelect(this)" title="家">🏡</button>
   <div class="ed-sep"></div>
+  <button class="ed-btn" data-type="field_f001" data-variant="0" onclick="edSelect(this)" title="field_001">🟫</button>
+  <button class="ed-btn" data-type="field_f002" data-variant="0" onclick="edSelect(this)" title="field_002">◻️</button>
+  <button class="ed-btn" data-type="field_f003" data-variant="0" onclick="edSelect(this)" title="field_003">🟩</button>
+  <button class="ed-btn" data-type="pig_config" data-variant="0" onclick="edSelect(this)" title="豚の範囲">🐷</button>
+  <div class="ed-sep"></div>
   <button class="ed-btn" id="ed-delete" onclick="edToggleDelete()" title="削除モード">✂️</button>
   <button class="ed-btn" onclick="edClearAll()" title="全消去">🗑️</button>
   <div class="ed-sep"></div>
@@ -302,7 +307,10 @@ const PIG_FRAMES = [{x:0,y:0,w:300,h:300},{x:300,y:0,w:300,h:300},{x:0,y:300,w:3
 const PIG_FRAME_MS = 200;
 const PIG_SPEED = 0.35;
 const PIG_Y_CONST = 11;
+const PIG_VISIBLE = false;
 const pigState = { gx:4.5, gy:6.5, dir:1, frameIndex:0, lastFrameTime:0 };
+let pigConfig = { minGx:4.5, maxGx:6.5, yConst:11 };
+let outerTileMap = {};
 
 // Map objects: 木(tree) 草(grass) 花(flower) 石(rock)
 const MAP_OBJ = {
@@ -407,6 +415,15 @@ function recalcLayout(){
 
 function g2s(gx,gy){return{x:originX+(gx-gy)*tileW/2,y:originY+(gx+gy)*tileH/2}}
 function pointInDiamond(px,py,cx,cy,w,h){const dx=Math.abs(px-cx),dy=Math.abs(py-cy);return(dx/(w/2)+dy/(h/2))<=1}
+function getOuterTileAt(wx,wy){
+  const G=getGridSize();
+  for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
+    if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
+    const p=g2s(gx,gy);
+    if(pointInDiamond(wx,wy,p.x,p.y,tileW,tileH))return{gx,gy};
+  }
+  return null;
+}
 
 // ==================== DECORATIONS ====================
 const DECO_LAYOUT=[
@@ -451,9 +468,32 @@ const DECO_LAYOUT=[
   {type:'grass',gx:-7.8,gy:1.4,variant:0}
 ];
 
+const DEFAULT_OUTER_TILE_MAP={
+  '-1,-1':null,'0,-1':'f001','1,-1':'f001','2,-1':'f001','3,-1':'f001','4,-1':'f002','5,-1':'f002','6,-1':null,
+  '-1,0':null,'6,0':null,'-1,1':null,'6,1':null,'-1,2':null,'6,2':null,'-1,3':null,'6,3':null,'-1,4':null,'6,4':null,'-1,5':null,'6,5':null,'-1,6':null,
+  '0,6':null,'1,6':null,'2,6':null,'3,6':null,'4,6':null,'5,6':null,'6,6':null
+};
+
+function initOuterTiles(){
+  if(Object.keys(outerTileMap).length===0)Object.assign(outerTileMap,DEFAULT_OUTER_TILE_MAP);
+  const G=getGridSize();
+  for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
+    if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
+    const key=gx+','+gy;
+    if(outerTileMap[key]===undefined)outerTileMap[key]='f003';
+  }
+}
+
+function applyPigConfig(){
+  const pc=decos.find(d=>d.type==='pig_config');
+  if(pc){pigConfig={minGx:pc.minGx,maxGx:pc.maxGx,yConst:pc.yConst};pigState.gx=pc.minGx;pigState.gy=pc.yConst-pc.minGx;}
+}
+
 function generateDecorations(){
   decos.length=0;
   DECO_LAYOUT.forEach(d=>decos.push({...d}));
+  initOuterTiles();
+  applyPigConfig();
   buildStaticDrawList();
 }
 
@@ -463,11 +503,15 @@ function buildStaticDrawList(){
   const G=getGridSize();
   for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
     if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
+    const key=gx+','+gy;
+    const tileType=outerTileMap[key];
+    if(tileType===null)continue;
+    const tt=tileType||'f003';
     const d=gx+gy;
     staticDrawList.push({depth:d,draw(){
       const p=g2s(gx,gy);
-      if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame('f003',p.x,p.y,tileW,tileH);
-      else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=((gx+gy)%2===0)?'rgba(100,160,50,.18)':'rgba(80,140,40,.12)';ctx.fill()}
+      if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(tt,p.x,p.y,tileW,tileH);
+      else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=tt==='f003'?'rgba(100,160,50,.18)':'rgba(139,90,43,.4)';ctx.fill()}
       ctx.strokeStyle='rgba(0,0,0,.08)';ctx.lineWidth=1;drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.stroke();
     }});
   }
@@ -476,10 +520,18 @@ function buildStaticDrawList(){
     staticDrawList.push({depth:gx+gy+.05,draw(){drawFarmTile(gx,gy,idx,Date.now())}});
   }
   for(const d of decos){
+    if(d.type==='pig_config')continue;
     const dd=d.gx+d.gy+(d.type==='tree'?0.3:0);
     staticDrawList.push({depth:dd,draw(){
       if(['tree','grass','flower','rock'].includes(d.type))drawMapObj(d);
       else if(d.type==='house')drawHouse(d);
+      else if(d.type==='field_f001'||d.type==='field_f002'||d.type==='field_f003'){
+        const p=g2s(d.gx,d.gy);
+        const key=d.type.replace('field_','');
+        if(fieldSheetImg.complete&&fieldSheetImg.naturalWidth>0)drawFieldFrame(key,p.x,p.y,tileW,tileH);
+        else{drawDiamond(p.x,p.y,tileW*.96,tileH*.96);ctx.fillStyle=d.type==='field_f003'?'rgba(100,160,50,.3)':'rgba(139,90,43,.4)';ctx.fill()}
+        ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=1;drawDiamond(p.x,p.y,tileW,tileH);ctx.stroke();
+      }
     }});
   }
   staticDrawList.sort((a,b)=>a.depth-b.depth);
@@ -531,13 +583,12 @@ function drawMapObj(item){
 function drawPig(now){
   if(!pigImg.complete||pigImg.naturalWidth<=0)return;
   if(pigState.lastFrameTime===0)pigState.lastFrameTime=now;
-  const G=getGridSize();
-  const minGx=4.5,maxGx=6.5;
+  const minGx=pigConfig.minGx,maxGx=pigConfig.maxGx,yConst=pigConfig.yConst;
   pigState.gx+=pigState.dir*PIG_SPEED*(now-pigState.lastFrameTime)/1000;
   pigState.lastFrameTime=now;
   if(pigState.gx<=minGx){pigState.gx=minGx;pigState.dir=1;}
   if(pigState.gx>=maxGx){pigState.gx=maxGx;pigState.dir=-1;}
-  pigState.gy=PIG_Y_CONST-pigState.gx;
+  pigState.gy=yConst-pigState.gx;
   pigState.frameIndex=Math.floor(now/PIG_FRAME_MS)%PIG_FRAMES.length;
   const fr=PIG_FRAMES[pigState.frameIndex];
   const p=g2s(pigState.gx,pigState.gy);
@@ -602,10 +653,10 @@ function render(ts){
   const pigDepth=pigState.gx+pigState.gy;
   let pigDrawn=false;
   for(let i=0;i<staticDrawList.length;i++){
-    if(!pigDrawn&&staticDrawList[i].depth>pigDepth){drawPig(now);pigDrawn=true}
+    if(PIG_VISIBLE&&!pigDrawn&&staticDrawList[i].depth>pigDepth){drawPig(now);pigDrawn=true}
     staticDrawList[i].draw();
   }
-  if(!pigDrawn)drawPig(now);
+  if(PIG_VISIBLE&&!pigDrawn)drawPig(now);
 
   // Tap highlight
   if(highlightTile){
@@ -792,7 +843,7 @@ canvas.addEventListener('wheel',e=>{
 },{passive:false});
 
 function handleTap(sx,sy){
-  if(EDITOR_MODE){const g=screenToGrid(sx,sy);edPlace(g.gx,g.gy);return;}
+  if(EDITOR_MODE){const g=screenToGrid(sx,sy);edPlace(g.gx,g.gy,sx,sy);return;}
   if(document.querySelector('.modal-overlay.active')||document.querySelector('#levelup-overlay.active'))return;
   const w=screenToWorld(sx,sy);
   const G = getGridSize();
@@ -1063,36 +1114,81 @@ function edToggleDelete(){
   if(edState.deleteMode)document.getElementById('ed-delete').classList.add('del-active');
 }
 
-function edPlace(gx,gy){
-  if(edState.deleteMode){edRemoveNearest(gx,gy);return;}
+function edPlace(gx,gy,sx,sy){
+  if(edState.deleteMode){edRemoveNearest(gx,gy,sx,sy);return;}
+  const G=getGridSize();
+  const gxi=Math.round(gx),gyi=Math.round(gy);
+  const isOuter=gxi<0||gxi>=G||gyi<0||gyi>=G;
+  if(['field_f001','field_f002','field_f003'].includes(edState.type)&&isOuter){
+    outerTileMap[gxi+','+gyi]=edState.type.replace('field_','');
+    buildStaticDrawList();
+    return;
+  }
+  if(edState.type==='pig_config'){
+    const i=decos.findIndex(d=>d.type==='pig_config');
+    const yConst=gxi+gyi;
+    const nc={type:'pig_config',minGx:gxi-1,maxGx:gxi+1,yConst};
+    if(i>=0)decos[i]=nc;else decos.push(nc);
+    applyPigConfig();
+    buildStaticDrawList();
+    return;
+  }
   if(edState.type==='house'){const i=decos.findIndex(d=>d.type==='house');if(i>=0)decos.splice(i,1);}
   decos.push({type:edState.type,gx:Math.round(gx*10)/10,gy:Math.round(gy*10)/10,variant:edState.variant});
   buildStaticDrawList();
 }
 
-function edRemoveNearest(gx,gy){
+function edRemoveNearest(gx,gy,sx,sy){
+  const G=getGridSize();
+  let ot=null;
+  if(sx!=null&&sy!=null){const w=screenToWorld(sx,sy);ot=getOuterTileAt(w.x,w.y);}
+  else{const gxi=Math.round(gx),gyi=Math.round(gy);if(gxi<0||gxi>=G||gyi<0||gyi>=G)ot={gx:gxi,gy:gyi};}
+  if(ot){outerTileMap[ot.gx+','+ot.gy]=null;buildStaticDrawList();return;}
+  const pc=decos.find(d=>d.type==='pig_config');
+  if(pc){
+    const py=pc.yConst-pc.minGx;
+    const distToLine=Math.abs((pc.yConst-gx)-gy)/Math.sqrt(2);
+    if(gx>=pc.minGx-0.5&&gx<=pc.maxGx+0.5&&distToLine<1.5){decos.splice(decos.indexOf(pc),1);applyPigConfig();buildStaticDrawList();return;}
+  }
   let best=-1,bestDist=2;
   for(let i=0;i<decos.length;i++){const d=Math.hypot(decos[i].gx-gx,decos[i].gy-gy);if(d<bestDist){bestDist=d;best=i}}
-  if(best>=0){decos.splice(best,1);buildStaticDrawList();}
+  if(best>=0){decos.splice(best,1);applyPigConfig();buildStaticDrawList();}
 }
 
-function edClearAll(){if(confirm('すべての装飾を削除しますか？')){decos.length=0;buildStaticDrawList();}}
+function edClearAll(){
+  if(confirm('すべての装飾を削除しますか？')){
+    decos.length=0;
+    pigConfig={minGx:4.5,maxGx:6.5,yConst:11};
+    const G=getGridSize();
+    for(let gy=-1;gy<=G;gy++)for(let gx=-1;gx<=G;gx++){
+      if(gx>=0&&gx<G&&gy>=0&&gy<G)continue;
+      outerTileMap[gx+','+gy]='f003';
+    }
+    buildStaticDrawList();
+  }
+}
 
 function edExport(){
-  const data=JSON.stringify(decos.map(d=>({type:d.type,gx:d.gx,gy:d.gy,...(d.variant!==undefined?{variant:d.variant}:{})})),null,2);
+  const layout={decos:decos.map(d=>({type:d.type,gx:d.gx,gy:d.gy,...(d.variant!==undefined?{variant:d.variant}:{}),...(d.type==='pig_config'?{minGx:d.minGx,maxGx:d.maxGx,yConst:d.yConst}:{})})),outerTileMap:{...outerTileMap}};
+  const data=JSON.stringify(layout,null,2);
   navigator.clipboard.writeText(data)
     .then(()=>showToast('📋 クリップボードにコピーしました','success'))
     .catch(()=>prompt('以下をコピーしてください:',data));
 }
 
 function edImport(){
-  const s=prompt('デコレーションJSONを貼り付けてください:');
+  const s=prompt('レイアウトJSONを貼り付けてください（decos配列または{decos,outerTileMap}形式）:');
   if(!s)return;
   try{
-    const arr=JSON.parse(s);
-    if(!Array.isArray(arr))throw new Error();
+    const parsed=JSON.parse(s);
+    let arr,om;
+    if(Array.isArray(parsed)){arr=parsed;om={};}
+    else if(parsed.decos){arr=parsed.decos;om=parsed.outerTileMap||{};}
+    else throw new Error();
     decos.length=0;
     arr.forEach(d=>decos.push(d));
+    if(Object.keys(om).length>0)outerTileMap=om;
+    applyPigConfig();
     buildStaticDrawList();
     showToast('✅ インポートしました（'+arr.length+'個）','success');
   }catch{showToast('JSONの形式が正しくありません','warn');}
@@ -1132,8 +1228,9 @@ function initEditor(){
     e.preventDefault();
     if(!game)return;
     const rect=canvas.getBoundingClientRect();
-    const g=screenToGrid(e.clientX-rect.left,e.clientY-rect.top);
-    edRemoveNearest(g.gx,g.gy);
+    const sx=e.clientX-rect.left,sy=e.clientY-rect.top;
+    const g=screenToGrid(sx,sy);
+    edRemoveNearest(g.gx,g.gy,sx,sy);
   });
 }
 
