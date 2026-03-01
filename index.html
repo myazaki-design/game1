@@ -48,6 +48,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 
 /* ===== HUD ===== */
 #hud{position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 14px 6px;background:linear-gradient(180deg,var(--wood),var(--wood-dark));border-bottom:3px solid #2C1B0E;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.btn-options-circle{position:absolute;top:80px;right:10px;width:36px;height:36px;padding:0;border-radius:50%;border:none;background:rgba(80,80,80,.65);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3);-webkit-tap-highlight-color:transparent;z-index:12}
+.btn-options-circle:active{transform:scale(.95)}
 #hud-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .hud-item{display:flex;align-items:center;gap:5px;color:#fff;font-size:14px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.5)}
 .hud-item .emoji{font-size:18px}
@@ -67,8 +69,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 #btn-shop{background:linear-gradient(135deg,#FF8F00,#F57F17)}
 #btn-info{background:linear-gradient(135deg,var(--blue-btn),#1565C0)}
 
+/* ===== DEBUG BAR ===== */
+#debug-bar{position:absolute;top:80px;left:8px;z-index:15;display:flex;gap:6px}
+.debug-btn{padding:6px 12px;font-size:12px;font-weight:700;color:#fff;background:rgba(100,100,100,.8);border:none;border-radius:8px;cursor:pointer;font-family:var(--font);-webkit-tap-highlight-color:transparent}
+.debug-btn:active{transform:scale(.95)}
+
 /* ===== STATS BAR ===== */
-#stats-bar{position:absolute;bottom:52px;left:0;right:0;z-index:10;padding:3px 14px;display:flex;justify-content:center;gap:16px;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);pointer-events:none}
+#stats-bar{display:none}
+#hud-row .hud-item:nth-child(2){display:none}
 
 /* ===== MODALS ===== */
 .modal-overlay{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:20px}
@@ -161,6 +169,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 <!-- ===== GAME ===== -->
 <div id="game-wrap" style="display:none">
   <canvas id="game-canvas"></canvas>
+  <div id="debug-bar">
+    <button class="debug-btn" onclick="debugLevelMax()">LVMAX</button>
+  </div>
   <div id="hud">
     <div id="hud-row">
       <div class="hud-item"><span class="emoji">👨‍🌾</span> Lv.<span id="level-display">1</span></div>
@@ -170,6 +181,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
     </div>
     <div id="xp-bar-wrap"><div id="xp-bar-fill"></div><div id="xp-bar-text">EXP 0/20</div></div>
   </div>
+  <button class="btn-options-circle" id="btn-options" onclick="openOptions()" title="オプション">⚙️</button>
   <div id="stats-bar">
     <span>📊 総収入: <span id="stat-earnings">0</span></span>
     <span>🌟 レア: <span id="stat-rares">0</span></span>
@@ -203,6 +215,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
   <div class="modal-title">🛒 ショップ</div>
   <div class="crop-list" id="shop-seeds"></div>
   <button class="modal-close" onclick="closeModal('modal-shop')">とじる</button>
+</div></div>
+<div class="modal-overlay" id="modal-options"><div class="modal-card">
+  <div class="modal-title">⚙️ オプション</div>
+  <div class="unlock-info" style="margin-bottom:12px">
+    <button class="unlock-btn" style="margin-bottom:8px" onclick="goToTitle()">🏠 タイトルに戻る</button>
+    <button class="unlock-btn" id="btn-sound-toggle" onclick="toggleSound()">🔊 サウンド ON</button>
+  </div>
+  <button class="modal-close" onclick="closeModal('modal-options')">とじる</button>
 </div></div>
 <div class="modal-overlay" id="modal-info"><div class="modal-card">
   <div class="modal-title">📖 あそびかた</div>
@@ -331,7 +351,8 @@ mapSheetImg.src = 'assets/map.png';
 let mapSheetFrames = {};
 fetch('assets/map.json').then(r=>r.json()).then(data=>{mapSheetFrames=data.frames||{};});
 const mapObjImgs = MAP_OBJ; // type -> [filename,...]
-function playSound(id){const a=SOUNDS[id];if(a){a.currentTime=0;a.play().catch(()=>{})}}
+let soundMuted=localStorage.getItem('soundMuted')==='1';
+function playSound(id){if(soundMuted)return;const a=SOUNDS[id];if(a){a.currentTime=0;a.play().catch(()=>{})}}
 
 // ==================== STATE ====================
 let game = null, selectedPlotIndex = -1, selectedPlotKey = null;
@@ -1001,6 +1022,13 @@ function addXP(amt){
   game.xp+=amt;
   while(game.xp>=game.xpToNext){game.xp-=game.xpToNext;game.level++;game.xpToNext=getXpToNext(game.level);game.coins+=game.level*5;showLevelUp()}
 }
+const MAX_LEVEL=Math.max(...CROPS.map(c=>c.reqLv));
+function debugLevelMax(){
+  if(!game)return;
+  game.level=MAX_LEVEL;game.xp=0;game.xpToNext=getXpToNext(MAX_LEVEL);
+  saveGame();renderHUD();
+  showToast('🔓 全レベル解放！ Lv.'+MAX_LEVEL,'info');
+}
 
 function showLevelUp(){
   document.getElementById('lu-level-text').textContent='Lv.'+game.level;
@@ -1068,6 +1096,21 @@ function openShop(){
   c.innerHTML=html;openModal('modal-shop');
 }
 function openInfo(){openModal('modal-info')}
+function openOptions(){
+  document.getElementById('btn-sound-toggle').textContent=soundMuted?'🔇 サウンド OFF':'🔊 サウンド ON';
+  openModal('modal-options');
+}
+function goToTitle(){
+  closeModal('modal-options');
+  document.getElementById('game-wrap').style.display='none';
+  document.getElementById('title-screen').style.display='flex';
+  saveGame();
+}
+function toggleSound(){
+  soundMuted=!soundMuted;
+  localStorage.setItem('soundMuted',soundMuted?'1':'0');
+  document.getElementById('btn-sound-toggle').textContent=soundMuted?'🔇 サウンド OFF':'🔊 サウンド ON';
+}
 function openModal(id){document.getElementById(id).classList.add('active')}
 function closeModal(id){document.getElementById(id).classList.remove('active');selectedPlotIndex=-1;selectedPlotKey=null}
 document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay')&&e.target.classList.contains('active')){e.target.classList.remove('active');selectedPlotIndex=-1;selectedPlotKey=null}});
