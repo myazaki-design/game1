@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
-<title>ほのぼの農園</title>
+<title>ほのぼのファーム</title>
 <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -23,7 +23,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 #game-canvas{display:block;width:100%;height:100%}
 
 /* ===== TITLE SCREEN ===== */
-#title-screen{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#87CEEB 0%,#B2EBF2 30%,#AED581 50%,#7CB342 60%,#558B2F 100%);text-align:center;padding:20px}
+#title-screen{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#87CEEB 0%,#B2EBF2 18%,#AED581 35%,#7CB342 50%,#558B2F 100%);text-align:center;padding:20px}
 .title-clouds{position:absolute;top:0;left:0;right:0;height:40%;pointer-events:none;overflow:hidden}
 .cloud{position:absolute;font-size:40px;opacity:0.6;animation:cloudFloat linear infinite}
 .cloud:nth-child(1){top:8%;left:-10%;animation-duration:25s}
@@ -32,7 +32,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 @keyframes cloudFloat{0%{transform:translateX(-100px)}100%{transform:translateX(calc(100vw + 100px))}}
 .title-deco{font-size:60px;margin-bottom:8px;animation:titleBounce 2s ease-in-out infinite}
 @keyframes titleBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
-#title-screen h1{font-size:36px;font-weight:900;color:#fff;text-shadow:0 3px 0 #558B2F,0 0 20px rgba(255,255,255,0.3);margin-bottom:4px;letter-spacing:2px}
+#title-screen h1{font-size:36px;font-weight:900;color:#fff;margin-bottom:4px;letter-spacing:2px}
 #title-screen .subtitle{font-size:14px;color:#E8F5E9;margin-bottom:32px;font-weight:700}
 .title-items{display:flex;gap:12px;margin-bottom:36px;font-size:36px}
 .title-items span{animation:itemFloat 2.5s ease-in-out infinite}
@@ -42,7 +42,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 #title-buttons{display:flex;flex-direction:column;gap:12px;width:100%;max-width:280px}
 .title-btn{padding:16px 20px;font-size:20px;font-weight:800;color:#fff;border:none;border-radius:50px;cursor:pointer;letter-spacing:1px;transition:transform .15s;-webkit-tap-highlight-color:transparent;font-family:var(--font)}
 .title-btn:active{transform:scale(.96)}
-#btn-start{background:linear-gradient(135deg,#FF7043,#E64A19);box-shadow:0 5px 15px rgba(230,74,25,.4)}
+#btn-start{background:linear-gradient(135deg,#9E9E9E,#757575);box-shadow:0 3px 10px rgba(0,0,0,.2);padding:12px 20px;font-size:16px;width:auto;max-width:180px;align-self:center}
 #btn-continue{background:linear-gradient(135deg,var(--green-btn),var(--green-btn-dark));box-shadow:0 5px 15px rgba(67,160,71,.4)}
 #btn-reset{background:transparent;color:#C8E6C9;font-size:13px;box-shadow:none;padding:8px;font-weight:600}
 
@@ -160,7 +160,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 <div id="title-screen">
   <div class="title-clouds"><div class="cloud">☁️</div><div class="cloud">☁️</div><div class="cloud">☁️</div></div>
   <div class="title-deco">🏡</div>
-  <h1>ほのぼの農園</h1>
+  <h1>ほのぼのファーム</h1>
   <div class="subtitle">🌱 あなただけの農園をつくろう 🌱</div>
   <div class="title-items"><span>🌾</span><span>🥕</span><span>🍅</span><span>🌽</span><span>🍓</span><span>🎃</span></div>
   <div id="title-buttons"><button class="title-btn" id="btn-start" onclick="newGame()">🌱 はじめる</button></div>
