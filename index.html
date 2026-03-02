@@ -42,8 +42,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 #title-buttons{display:flex;flex-direction:column;gap:12px;width:100%;max-width:280px}
 .title-btn{padding:16px 20px;font-size:20px;font-weight:800;color:#fff;border:none;border-radius:50px;cursor:pointer;letter-spacing:1px;transition:transform .15s;-webkit-tap-highlight-color:transparent;font-family:var(--font)}
 .title-btn:active{transform:scale(.96)}
-#btn-start{background:linear-gradient(135deg,#9E9E9E,#757575);box-shadow:0 3px 10px rgba(0,0,0,.2);padding:12px 20px;font-size:16px;width:auto;max-width:180px;align-self:center}
-#btn-continue{background:linear-gradient(135deg,var(--green-btn),var(--green-btn-dark));box-shadow:0 5px 15px rgba(67,160,71,.4)}
+#btn-start{background:linear-gradient(135deg,#5D4037,#3E2723);box-shadow:0 3px 10px rgba(0,0,0,.2);padding:12px 20px;font-size:16px;width:auto;max-width:180px;align-self:center}
+#btn-continue{background:linear-gradient(135deg,#5D4037,#3E2723);box-shadow:0 3px 10px rgba(0,0,0,.2)}
 #btn-reset{background:transparent;color:#C8E6C9;font-size:13px;box-shadow:none;padding:8px;font-weight:600}
 
 /* ===== HUD ===== */
@@ -66,8 +66,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 .bottom-btn{padding:10px 20px;font-size:14px;font-weight:800;color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:var(--font);-webkit-tap-highlight-color:transparent;transition:transform .12s;box-shadow:0 3px 8px rgba(0,0,0,.2)}
 .bottom-btn:active{transform:scale(.95)}
 #btn-build{background:linear-gradient(135deg,#9E9E9E,#757575);opacity:0.6;cursor:not-allowed}
-#btn-shop{background:linear-gradient(135deg,#FF8F00,#F57F17)}
-#btn-info{background:linear-gradient(135deg,var(--blue-btn),#1565C0)}
+#btn-shop{background:linear-gradient(135deg,#5D4037,#3E2723)}
+#btn-info{background:linear-gradient(135deg,#5D4037,#3E2723)}
 
 /* ===== DEBUG BAR ===== */
 #debug-bar{position:absolute;top:80px;left:8px;z-index:15;display:flex;gap:6px}
@@ -107,6 +107,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#558B2F;touch-action
 .unlock-btn{display:block;margin:0 auto;padding:12px 36px;font-size:16px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--green-btn),var(--green-btn-dark));border:none;border-radius:30px;cursor:pointer;font-family:var(--font);box-shadow:0 3px 10px rgba(67,160,71,.3);-webkit-tap-highlight-color:transparent}
 .unlock-btn:active{transform:scale(.96)}
 .unlock-btn:disabled{background:#BDBDBD;box-shadow:none;cursor:default}
+#modal-options .unlock-btn{background:linear-gradient(135deg,#5D4037,#3E2723);box-shadow:0 3px 10px rgba(0,0,0,.2)}
 
 /* ===== LEVEL UP ===== */
 #levelup-overlay{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6)}
@@ -395,10 +396,10 @@ const camera = { x:0, y:0, zoom:1 };
 const ZOOM_MIN=0.9, ZOOM_MAX=1.4;
 function getPanMax(){return Math.round(120*camera.zoom)}
 function screenToWorld(sx,sy){
-  return{x:(sx-camera.x-W/2)/camera.zoom+W/2,y:(sy-camera.y-H/2)/camera.zoom+H/2};
+  return{x:(sx-W/2)/camera.zoom-camera.x+W/2,y:(sy-H/2)/camera.zoom-camera.y+H/2};
 }
 function worldToScreen(wx,wy){
-  return{x:(wx-W/2)*camera.zoom+W/2+camera.x,y:(wy-H/2)*camera.zoom+H/2+camera.y};
+  return{x:(wx-W/2+camera.x)*camera.zoom+W/2,y:(wy-H/2+camera.y)*camera.zoom+H/2};
 }
 const CULL_MARGIN=200;
 function isVisible(wx,wy){
